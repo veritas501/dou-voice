@@ -1,0 +1,76 @@
+name: Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  nsis:
+    name: NSIS installer
+    runs-on: windows-latest
+    steps:
+      - name: Enable long paths
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Install Tauri CLI
+        shell: pwsh
+        run: cargo install tauri-cli --locked
+
+      - name: Build installer
+        shell: pwsh
+        working-directory: apps/dou-voice-desktop
+        run: cargo tauri build
+
+      - name: Stage NSIS artifact
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:GITHUB_WORKSPACE "dist/artifacts"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
+          $patterns = @(
+            "apps/dou-voice-desktop/src-tauri/target/release/bundle/nsis/*",
+            "target/release/bundle/nsis/*"
+          )
+
+          $copied = 0
+          foreach ($pattern in $patterns) {
+            Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | ForEach-Object {
+              $target = Join-Path $dest "dou-voice-windows-x86_64-pc-windows-msvc-nsis.exe"
+              Copy-Item -Path $_.FullName -Destination $target -Force
+              $copied += 1
+            }
+          }
+
+          if ($copied -eq 0) {
+            throw "No NSIS artifact found."
+          }
+
+          Get-ChildItem -Path $dest -Force
+
+      - name: Upload NSIS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dou-voice-windows-x86_64-pc-windows-msvc-nsis.exe
+          if-no-files-found: error
+          path: dist/artifacts/dou-voice-windows-x86_64-pc-windows-msvc-nsis.exe

@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: ${{ matrix.name }} checks
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            platform: windows
+            arch: x86_64
+            target: x86_64-pc-windows-msvc
+          - name: macOS
+            os: macos-latest
+            platform: macos
+            arch: aarch64
+            target: aarch64-apple-darwin
+          - name: Linux
+            os: ubuntu-22.04
+            platform: linux
+            arch: x86_64
+            target: x86_64-unknown-linux-gnu
+    steps:
+      - name: Enable long paths
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev libx11-dev libxtst-dev libxrandr-dev
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Run CI checks
+        run: bun run scripts/ci.js
+
+      - name: Build desktop app
+        run: cargo build --workspace --release
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
+
+      - name: Build Windows desktop bundle
+        if: runner.os == 'Windows'
+        working-directory: apps/dou-voice-desktop
+        run: cargo tauri build --bundles nsis
+
+      - name: Build macOS desktop bundle
+        if: runner.os == 'macOS'
+        working-directory: apps/dou-voice-desktop
+        run: cargo tauri build --bundles app,dmg
+
+      - name: Build Linux desktop bundle
+        if: runner.os == 'Linux'
+        working-directory: apps/dou-voice-desktop
+        run: cargo tauri build --bundles deb,appimage
+
+      - name: Stage desktop bundle artifacts
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:GITHUB_WORKSPACE "dist/artifacts"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $platform = "${{ matrix.platform }}"
+          $targetTriple = "${{ matrix.target }}"
+
+          if ("${{ runner.os }}" -eq "Windows") {
+            $patterns = @(
+              "apps/dou-voice-desktop/src-tauri/target/release/bundle/nsis/*",
+              "target/release/bundle/nsis/*"
+            )
+          } elseif ("${{ runner.os }}" -eq "macOS") {
+            $patterns = @(
+              "apps/dou-voice-desktop/src-tauri/target/release/bundle/macos/*",
+              "apps/dou-voice-desktop/src-tauri/target/release/bundle/dmg/*",
+              "target/release/bundle/macos/*",
+              "target/release/bundle/dmg/*"
+            )
+          } else {
+            $patterns = @(
+              "apps/dou-voice-desktop/src-tauri/target/release/bundle/deb/*",
+              "apps/dou-voice-desktop/src-tauri/target/release/bundle/appimage/*",
+              "target/release/bundle/deb/*",
+              "target/release/bundle/appimage/*"
+            )
+          }
+
+          $copied = 0
+          foreach ($pattern in $patterns) {
+            Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue | ForEach-Object {
+              $name = $_.Name
+              $type = "bundle"
+              $suffix = $_.Extension
+              if ($_.PSIsContainer -and $_.Name.EndsWith(".app")) {
+                $type = "app"
+                $suffix = ".app"
+              } elseif ($_.Extension -eq ".dmg") {
+                $type = "dmg"
+              } elseif ($_.Extension -eq ".deb") {
+                $type = "deb"
+              } elseif ($_.Extension -eq ".AppImage") {
+                $type = "appimage"
+              } elseif ($_.Extension -eq ".exe") {
+                $type = "nsis"
+              }
+              $target = Join-Path $dest "dou-voice-$platform-$targetTriple-$type$suffix"
+              Copy-Item -Path $_.FullName -Destination $target -Recurse -Force
+              $copied += 1
+            }
+          }
+
+          if ($copied -eq 0) {
+            throw "No desktop bundle artifacts found."
+          }
+
+          Get-ChildItem -Path $dest -Force
+
+      - name: Upload Windows desktop bundle
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dou-voice-${{ matrix.platform }}-${{ matrix.target }}-nsis.exe
+          if-no-files-found: error
+          path: dist/artifacts/dou-voice-${{ matrix.platform }}-${{ matrix.target }}-nsis.exe
+
+      - name: Upload macOS dmg bundle
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dou-voice-${{ matrix.platform }}-${{ matrix.target }}-dmg.dmg
+          if-no-files-found: error
+          path: dist/artifacts/dou-voice-${{ matrix.platform }}-${{ matrix.target }}-dmg.dmg
+
+      - name: Upload macOS app bundle
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dou-voice-${{ matrix.platform }}-${{ matrix.target }}-app.app
+          if-no-files-found: warn
+          path: dist/artifacts/dou-voice-${{ matrix.platform }}-${{ matrix.target }}-app.app
+
+      - name: Upload Linux deb bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dou-voice-${{ matrix.platform }}-${{ matrix.target }}-deb.deb
+          if-no-files-found: error
+          path: dist/artifacts/dou-voice-${{ matrix.platform }}-${{ matrix.target }}-deb.deb
+
+      - name: Upload Linux AppImage bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dou-voice-${{ matrix.platform }}-${{ matrix.target }}-appimage.AppImage
+          if-no-files-found: error
+          path: dist/artifacts/dou-voice-${{ matrix.platform }}-${{ matrix.target }}-appimage.AppImage

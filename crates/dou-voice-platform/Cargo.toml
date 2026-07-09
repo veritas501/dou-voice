@@ -1,0 +1,44 @@
+[package]
+name = "dou-voice-platform"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# enigo 跨平台键盘模拟：默认走 `enigo.text()`，是文本输入的主路径。
+# 关闭默认 x11rb feature（Linux 才需要）；Windows/macOS 不需要任何 feature。
+enigo = { version = "0.6.1", default-features = false }
+arboard = "3.5"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+enigo = { version = "0.6.1", default-features = false, features = ["x11rb", "wayland"] }
+
+[target.'cfg(not(windows))'.dependencies]
+rodio = { version = "0.21", default-features = false, features = ["playback", "wav"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.3", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+    "Win32_System_DataExchange",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_Threading",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unwrap_used = "deny"

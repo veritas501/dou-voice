@@ -1,0 +1,136 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.key
+*.pem
+*.p12
+*.pfx
+auth.json
+auth-params.json
+cookies.json
+device-id.json
+web-id.json
+
+# Logs and diagnostics
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+diagnostics/
+crash-reports/
+
+# Rust
+/target/
+**/target/
+*.rs.bk
+
+# Tauri
+**/src-tauri/target/
+**/src-tauri/gen/
+**/src-tauri/.taurignore
+**/src-tauri/tauri.conf.*.json
+**/src-tauri/capabilities/*.local.json
+
+# Node / TypeScript
+node_modules/
+dist/
+build/
+.vite/
+.next/
+.nuxt/
+.svelte-kit/
+coverage/
+*.tsbuildinfo
+
+# Generated frontend bundles (built by Bun/build.rs)
+apps/dou-voice-desktop/web/scripts/main-react.js
+apps/dou-voice-desktop/web/scripts/overlay-react.js
+
+# Python tooling used by scripts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# macOS / Xcode
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+DerivedData/
+*.xcworkspace
+xcuserdata/
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.pdb
+
+# Linux
+*~
+.directory
+.Trash-*/
+
+# Editors and IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.swp
+*.swo
+
+# Build artifacts and packaged apps
+out/
+release/
+artifacts/
+*.app/
+*.dmg
+*.msi
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.flatpak
+*.snap
+
+# Audio captures and temporary ASR data
+/input_sample.bin
+/output_sample.bin
+*.wav
+!crates/dou-voice-platform/assets/sounds/*.wav
+*.pcm
+*.mp3
+*.m4a
+*.ogg
+recordings/
+transcripts/
+
+# Temporary files
+tmp/
+temp/
+.cache/

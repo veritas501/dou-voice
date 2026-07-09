@@ -1,0 +1,21 @@
+[workspace]
+members = [
+    "apps/dou-voice-desktop/src-tauri",
+    "crates/dou-voice-core",
+    "crates/dou-voice-platform",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/example/dou-voice"
+rust-version = "1.78"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unwrap_used = "deny"
