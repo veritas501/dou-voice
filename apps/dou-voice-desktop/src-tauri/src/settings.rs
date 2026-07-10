@@ -7,8 +7,9 @@ use crate::app_state::{
     AppSettings, AudioInputDeviceResult, DesktopState, SettingsSnapshot, AUTH_FILE_NAME,
     DEFAULT_HOTKEY_LABEL, INPUT_METHOD_CLIPBOARD, INPUT_METHOD_DIRECT, SETTINGS_FILE_NAME,
 };
-use crate::diagnostics::auth_status_result;
+use crate::diagnostics::{auth_status_result, emit_voice_debug};
 use crate::hotkey::update_global_shortcut;
+use crate::microphone_worker::reconcile_prewarmed_microphone;
 use crate::overlay::hide_overlay;
 use crate::util::unix_time_ms;
 
@@ -81,13 +82,42 @@ pub(crate) fn save_settings(
         latest.clone()
     };
     let hotkey_changed = previous_settings.hotkey != settings.hotkey;
+    let microphone_changed = previous_settings.microphone_always_on
+        != settings.microphone_always_on
+        || (settings.microphone_always_on
+            && previous_settings.selected_input_device != settings.selected_input_device);
+    if microphone_changed && voice_input_is_busy(&app)? {
+        return Err(
+            "cannot change the local microphone mode while voice input is active".to_string(),
+        );
+    }
     if hotkey_changed {
         update_global_shortcut(&app, &previous_settings.hotkey, &settings.hotkey)?;
+    }
+
+    if microphone_changed {
+        if let Err(error) = reconcile_prewarmed_microphone(
+            &app,
+            settings.microphone_always_on,
+            settings.selected_input_device.clone(),
+        ) {
+            if hotkey_changed {
+                let _ = update_global_shortcut(&app, &settings.hotkey, &previous_settings.hotkey);
+            }
+            return Err(format!("failed to update local microphone mode: {error}"));
+        }
     }
 
     if let Err(error) = save_settings_file(&app, &settings) {
         if hotkey_changed {
             let _ = update_global_shortcut(&app, &settings.hotkey, &previous_settings.hotkey);
+        }
+        if microphone_changed {
+            let _ = reconcile_prewarmed_microphone(
+                &app,
+                previous_settings.microphone_always_on,
+                previous_settings.selected_input_device.clone(),
+            );
         }
         return Err(error);
     }
@@ -170,6 +200,35 @@ pub(crate) fn initialize_settings(app: &AppHandle<Wry>) -> Result<(), String> {
         .map_err(|_| "user settings state poisoned".to_string())?;
     *user_settings_exists = loaded.exists;
     Ok(())
+}
+
+/// 启动时恢复用户选择的本地麦克风常开模式。
+///
+/// 设备被其他程序占用或权限未授予时，应用仍应能正常进入设置页，所以只记录诊断，
+/// 后续热键会自动回退到按需打开麦克风。
+pub(crate) fn initialize_prewarmed_microphone(app: &AppHandle<Wry>) {
+    let state = app.state::<DesktopState>();
+    let settings = state.settings.lock().map(|settings| settings.clone());
+    let Ok(settings) = settings else {
+        return;
+    };
+    if !settings.microphone_always_on {
+        return;
+    }
+    if let Err(error) = reconcile_prewarmed_microphone(
+        app,
+        settings.microphone_always_on,
+        settings.selected_input_device,
+    ) {
+        emit_voice_debug(
+            app,
+            "prewarmed_mic_unavailable",
+            format!("Failed to restore local microphone stream: {error}"),
+            None,
+            None,
+            None,
+        );
+    }
 }
 
 struct LoadedSettings {
@@ -300,4 +359,23 @@ pub(crate) fn overlay_enabled(app: &AppHandle<Wry>) -> Result<bool, String> {
         .lock()
         .map_err(|_| "settings state poisoned".to_string())
         .map(|settings| settings.overlay_enabled)
+}
+
+/// 读取本地麦克风常开开关。
+pub(crate) fn microphone_always_on(app: &AppHandle<Wry>) -> Result<bool, String> {
+    let state = app.state::<DesktopState>();
+    state
+        .settings
+        .lock()
+        .map_err(|_| "settings state poisoned".to_string())
+        .map(|settings| settings.microphone_always_on)
+}
+
+fn voice_input_is_busy(app: &AppHandle<Wry>) -> Result<bool, String> {
+    let state = app.state::<DesktopState>();
+    state
+        .voice_busy
+        .lock()
+        .map_err(|_| "voice busy state poisoned".to_string())
+        .map(|busy| *busy)
 }

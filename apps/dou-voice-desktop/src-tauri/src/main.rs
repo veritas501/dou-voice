@@ -9,6 +9,7 @@ mod hotkey;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 mod macos_hotkey;
+mod microphone_worker;
 mod overlay;
 mod settings;
 mod tray;
@@ -27,7 +28,7 @@ use hotkey::{
 use overlay::setup_overlay;
 use settings::{
     get_available_input_devices, get_default_auth_path, get_settings, initialize_default_auth_path,
-    initialize_settings, save_settings,
+    initialize_prewarmed_microphone, initialize_settings, save_settings,
 };
 use tray::setup_tray;
 use voice::{get_voice_status, record_once_and_type};
@@ -60,6 +61,7 @@ fn main() {
         .setup(|app| {
             initialize_default_auth_path(app.handle())?;
             initialize_settings(app.handle())?;
+            initialize_prewarmed_microphone(app.handle());
             setup_overlay(app)?;
             setup_tray(app)?;
             setup_global_shortcut(app)?;

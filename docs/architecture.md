@@ -68,12 +68,13 @@ Tauri v2 shell。前端 + 后端 + build 脚本。
 
 - `main.rs`：注册 plugin、setup hook（初始化 auth 路径、设置、overlay、托盘、全局热键）、`invoke_handler` 注册全部 Tauri 命令、`on_window_event` 把主窗口关闭转为隐藏。
 - `app_state.rs`：共享状态。
-  - `DesktopState`：`auth_path` / `voice_busy` / `active_recording` / `voice_status` / `diagnostic_events` / `settings` / `user_settings_exists` / `hotkey`。CPAL stream 不放这里（Windows 上不是 `Send`），由 worker 线程持有。
+  - `DesktopState`：`auth_path` / `voice_busy` / `active_recording` / `voice_status` / `diagnostic_events` / `settings` / `user_settings_exists` / `hotkey` / `prewarmed_microphone`。CPAL stream 不放这里（Windows 上不是 `Send`），由 worker 线程持有。
   - `HotkeyRuntimeState`：`capture_active` / `pressed` / `suppressed_until_release` / `press_generation` / `last_press_at`，放在同一把锁下避免跨线程状态撕裂。
   - 常量：标签、文件名、默认值、超时（`HOTKEY_PRESS_DEBOUNCE=30ms`、`HOTKEY_RELEASE_FALLBACK_TIMEOUT=30s`、`OVERLAY_HIDE_DELAY=1.6s`、`MAX_DIAGNOSTIC_EVENTS=2000` 等）。
   - `LoginCaptureState`：登录窗口 localStorage 捕获态，用 `request_id` 避免读到上一轮残留。
 - `voice.rs`：语音输入主链路。`begin_voice_input` / `finish_voice_input` / `record_once_and_type`（5 秒测试录音）/ `start_hotkey_recording_body` / `finish_hotkey_recording_body`。负责状态切换、提示音、文本输入、诊断事件。
-- `voice_worker.rs`：`spawn_streaming_recording_worker`，在独立线程持有 CPAL stream，主线程只保存停止信号和结果接收端。
+- `voice_worker.rs`：`spawn_streaming_recognition_worker` / `spawn_streaming_recording_worker`。识别会话和音频来源分离：前者负责 ASR，后者仅在按需模式下在独立线程持有 CPAL stream。
+- `microphone_worker.rs`：`Keep Microphone Ready` 模式的本地常开 CPAL stream。空闲 PCM 直接丢弃，热键按下时才接入本次 ASR sender，松开后立即断开。
 - `hotkey.rs`：全局热键生命周期。`setup_global_shortcut` 注册 Tauri global shortcut；`trigger_hotkey_pressed` / `trigger_hotkey_released` 处理按下/松开；Windows 在 `WINDOWS_HOTKEY_POLL_INTERVAL=30ms` 间隔轮询 `platform::hotkey_pressed`，因为部分 modifier-only 组合 Tauri 注册路径不支持。
 - `macos_hotkey.rs`：macOS 专属热键辅助，`#[cfg(target_os = "macos")]` 且 `#[allow(unsafe_code)]`（workspace 其他地方 `unsafe_code = "forbid"`）。
 - `auth_window.rs`：登录窗口和认证导出。
@@ -126,6 +127,8 @@ hotkey released
   → wait for final events
   → type recognized text
 ```
+
+`Keep Microphone Ready` 开启时，不会持续上传或持续识别：启动阶段创建一次本地 CPAL stream；热键按下时把它接入新 ASR 会话，松开时仅断开该会话，空闲 PCM 始终直接丢弃。
 
 ### 热键
 
