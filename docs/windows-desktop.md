@@ -66,6 +66,7 @@ setup wizard 四步：
 
 - **Hotkey**：默认 `Ctrl+Q`。Windows 支持两个及以上修饰键组成的组合。
 - **Microphone**：默认 `Default`。指定设备不可用时回退到系统默认输入设备。
+- **Keep Microphone Ready**：默认关闭。开启后常开的是本地 CPAL 输入流；未按热键时 PCM 立即丢弃，只有按住热键的音频进入当次 ASR 会话。
 - **Input Method**：
   - `Direct typing with fallback`：先 `enigo.text()`（等价 `SendInput(KEYEVENTF_UNICODE)`）；失败后备份剪贴板 → 写入文本 → 发送 Ctrl+V（扫描码 `Key::Other(0x56)` 绕过键盘布局）→ 还原剪贴板。
   - `Clipboard paste`：只写入剪贴板，不自动粘贴。

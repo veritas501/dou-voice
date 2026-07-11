@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { motion } from "framer-motion";
 
@@ -37,8 +43,12 @@ function App() {
   const [authPath, setAuthPath] = useState("");
   const [appIcon, setAppIcon] = useState("");
   const [buildInfo, setBuildInfo] = useState(null);
-  const [devices, setDevices] = useState([{ id: "default", name: "Default", isDefault: true }]);
-  const [logLines, setLogLines] = useState(["Ready. Use Export for detailed diagnostics."]);
+  const [devices, setDevices] = useState([
+    { id: "default", name: "Default", isDefault: true },
+  ]);
+  const [logLines, setLogLines] = useState([
+    "Ready. Use Export for detailed diagnostics.",
+  ]);
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [pendingModifierHotkey, setPendingModifierHotkey] = useState(null);
   const [awaitingHotkeyRelease, setAwaitingHotkeyRelease] = useState(false);
@@ -81,7 +91,7 @@ function App() {
       writeLog(
         `${message} hotkey=${saved.hotkey} input=${saved.inputMethod} mic=${
           saved.selectedInputDevice || "default"
-        }`,
+        } localMic=${saved.microphoneAlwaysOn ? "always-on" : "on-demand"}`,
       );
       return saved;
     },
@@ -210,7 +220,13 @@ function App() {
       active = false;
       unlisten?.();
     };
-  }, [capturingHotkey, pendingModifierHotkey, onboardingRequired, saveSettings, writeLog]);
+  }, [
+    capturingHotkey,
+    pendingModifierHotkey,
+    onboardingRequired,
+    saveSettings,
+    writeLog,
+  ]);
 
   async function openLoginWindow() {
     await command("open_login_window");
@@ -233,18 +249,24 @@ function App() {
 
   async function recordOnce() {
     const result = await command("record_once_and_type", { seconds: 5 });
-    writeLog(`Voice input completed: ${result.finalText}\npcm_bytes=${result.pcmBytes}`);
+    writeLog(
+      `Voice input completed: ${result.finalText}\npcm_bytes=${result.pcmBytes}`,
+    );
   }
 
   async function exportDiagnostics() {
     const result = await command("export_diagnostics");
-    writeLog(`Diagnostics exported: ${result.outputPath}\nevent_count=${result.eventCount}`);
+    writeLog(
+      `Diagnostics exported: ${result.outputPath}\nevent_count=${result.eventCount}`,
+    );
   }
 
   async function checkAuthStatus() {
     const result = await command("check_auth_status");
     setAuth(result);
-    writeLog(`Auth status: load_ok=${result.loadOk} exists=${result.exists} path=${result.path}`);
+    writeLog(
+      `Auth status: load_ok=${result.loadOk} exists=${result.exists} path=${result.path}`,
+    );
   }
 
   async function startHotkeyCapture() {
@@ -262,7 +284,10 @@ function App() {
       updateOnboardingDraft({ hotkey: DEFAULT_HOTKEY });
       return;
     }
-    await saveSettings({ ...settingsRef.current, hotkey: DEFAULT_HOTKEY }, "Default hotkey saved.");
+    await saveSettings(
+      { ...settingsRef.current, hotkey: DEFAULT_HOTKEY },
+      "Default hotkey saved.",
+    );
   }
 
   async function stopHotkeyCapture({ resumeBackend = true } = {}) {
@@ -276,14 +301,19 @@ function App() {
 
   function cancelHotkeyCapture() {
     stopHotkeyCapture();
-    setSettings((current) => ({ ...current, hotkey: previousHotkeyRef.current }));
+    setSettings((current) => ({
+      ...current,
+      hotkey: previousHotkeyRef.current,
+    }));
     writeLog("Hotkey capture canceled.");
   }
 
   async function finalizeHotkey(hotkey, { resumeAfterKeyup = false } = {}) {
     let normalizedHotkey;
     try {
-      normalizedHotkey = await command("normalize_hotkey_candidate", { shortcut: hotkey });
+      normalizedHotkey = await command("normalize_hotkey_candidate", {
+        shortcut: hotkey,
+      });
     } catch (error) {
       writeLog(`Hotkey is not supported: ${hotkey}. ${error}`);
       return;
@@ -296,19 +326,27 @@ function App() {
       updateOnboardingDraft({ hotkey: normalizedHotkey });
       return;
     }
-    saveSettings({ ...settingsRef.current, hotkey: normalizedHotkey }, "Hotkey saved.").catch((error) =>
-      writeLog(error),
-    );
+    saveSettings(
+      { ...settingsRef.current, hotkey: normalizedHotkey },
+      "Hotkey saved.",
+    ).catch((error) => writeLog(error));
   }
 
   function updateSetting(patch, message) {
+    const previous = settingsRef.current;
     const next = normalizeSettings({ ...settingsRef.current, ...patch });
     setSettings(next);
-    saveSettings(next, message).catch((error) => writeLog(error));
+    saveSettings(next, message).catch((error) => {
+      setSettings(previous);
+      setOnboardingDraft(previous);
+      writeLog(error);
+    });
   }
 
   function updateOnboardingDraft(patch) {
-    setOnboardingDraft((current) => normalizeSettings({ ...current, ...patch }));
+    setOnboardingDraft((current) =>
+      normalizeSettings({ ...current, ...patch }),
+    );
   }
 
   async function finishOnboarding() {
@@ -326,7 +364,8 @@ function App() {
     { id: "diagnostics", label: "Diagnostics", hint: "Logs" },
     { id: "about", label: "About", hint: "Status" },
   ];
-  const activeSection = sections.find((section) => section.id === currentSection) || sections[0];
+  const activeSection =
+    sections.find((section) => section.id === currentSection) || sections[0];
 
   if (onboardingRequired === null) {
     return <OnboardingLoading appIcon={appIcon} />;
@@ -340,7 +379,9 @@ function App() {
         authPath={authPath}
         devices={deviceOptions}
         draft={onboardingDraft}
-        displayedHotkey={capturingHotkey ? displayedHotkey : onboardingDraft.hotkey}
+        displayedHotkey={
+          capturingHotkey ? displayedHotkey : onboardingDraft.hotkey
+        }
         capturingHotkey={capturingHotkey}
         step={onboardingStep}
         onStepChange={setOnboardingStep}
@@ -396,14 +437,25 @@ function App() {
             <span className="eyebrow">{activeSection.hint}</span>
             <h1>{activeSection.label}</h1>
           </div>
-          <button className="primary" type="button" onClick={() => runAction(recordOnce, writeLog)}>
+          <button
+            className="primary"
+            type="button"
+            onClick={() => runAction(recordOnce, writeLog)}
+          >
             Test Recording
           </button>
         </header>
 
         {currentSection === "general" && (
-          <motion.div className="section-stack" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-            <SettingsGroup title="Live" description="Current transcription state">
+          <motion.div
+            className="section-stack"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <SettingsGroup
+              title="Live"
+              description="Current transcription state"
+            >
               <div className="live-card">
                 <div className="live-card-top">
                   <StatusPill phase={voiceStatus.phase} />
@@ -415,11 +467,23 @@ function App() {
               </div>
             </SettingsGroup>
 
-            <SettingsGroup title="Input" description="Recording and text insertion">
+            <SettingsGroup
+              title="Input"
+              description="Recording and text insertion"
+            >
               <SettingRow title="Hotkey" description="Press-to-talk shortcut">
                 <div className="hotkey-row compact">
-                  <input id="setting-hotkey" readOnly spellCheck="false" value={displayedHotkey} />
-                  <button type="button" onClick={startHotkeyCapture} disabled={capturingHotkey}>
+                  <input
+                    id="setting-hotkey"
+                    readOnly
+                    spellCheck="false"
+                    value={displayedHotkey}
+                  />
+                  <button
+                    type="button"
+                    onClick={startHotkeyCapture}
+                    disabled={capturingHotkey}
+                  >
                     Change
                   </button>
                   <button type="button" onClick={useDefaultHotkey}>
@@ -436,7 +500,9 @@ function App() {
                     updateSetting(
                       {
                         selectedInputDevice:
-                          event.target.value === "default" ? null : event.target.value,
+                          event.target.value === "default"
+                            ? null
+                            : event.target.value,
                       },
                       "Microphone saved.",
                     )
@@ -445,18 +511,43 @@ function App() {
                   {deviceOptions.map((device) => (
                     <option key={device.id} value={device.id}>
                       {device.name}
-                      {device.isDefault && device.id !== "default" ? " (system default)" : ""}
+                      {device.isDefault && device.id !== "default"
+                        ? " (system default)"
+                        : ""}
                     </option>
                   ))}
                 </select>
               </SettingRow>
 
-              <SettingRow title="Input Method" description="How recognized text is inserted">
+              <SettingRow
+                title="Keep Microphone Ready"
+                description="Keep audio local while idle; only held-hotkey audio is sent for recognition"
+              >
+                <Toggle
+                  checked={settings.microphoneAlwaysOn === true}
+                  title="Local mic always on"
+                  subtitle=""
+                  onChange={(checked) =>
+                    updateSetting(
+                      { microphoneAlwaysOn: checked },
+                      "Local microphone mode saved.",
+                    )
+                  }
+                />
+              </SettingRow>
+
+              <SettingRow
+                title="Input Method"
+                description="How recognized text is inserted"
+              >
                 <select
                   id="setting-input-method"
                   value={settings.inputMethod}
                   onChange={(event) =>
-                    updateSetting({ inputMethod: event.target.value }, "Input method saved.")
+                    updateSetting(
+                      { inputMethod: event.target.value },
+                      "Input method saved.",
+                    )
                   }
                 >
                   <option value="direct">Direct typing with fallback</option>
@@ -465,21 +556,40 @@ function App() {
               </SettingRow>
             </SettingsGroup>
 
-            <SettingsGroup title="Feedback" description="Desktop feedback surfaces">
-              <SettingRow title="Sound" description="Play system feedback sounds">
+            <SettingsGroup
+              title="Feedback"
+              description="Desktop feedback surfaces"
+            >
+              <SettingRow
+                title="Sound"
+                description="Play system feedback sounds"
+              >
                 <Toggle
                   checked={settings.soundEnabled !== false}
                   title="Sound"
                   subtitle=""
-                  onChange={(checked) => updateSetting({ soundEnabled: checked }, "Sound setting saved.")}
+                  onChange={(checked) =>
+                    updateSetting(
+                      { soundEnabled: checked },
+                      "Sound setting saved.",
+                    )
+                  }
                 />
               </SettingRow>
-              <SettingRow title="Overlay" description="Show compact live status capsule">
+              <SettingRow
+                title="Overlay"
+                description="Show compact live status capsule"
+              >
                 <Toggle
                   checked={settings.overlayEnabled !== false}
                   title="Overlay"
                   subtitle=""
-                  onChange={(checked) => updateSetting({ overlayEnabled: checked }, "Overlay setting saved.")}
+                  onChange={(checked) =>
+                    updateSetting(
+                      { overlayEnabled: checked },
+                      "Overlay setting saved.",
+                    )
+                  }
                 />
               </SettingRow>
             </SettingsGroup>
@@ -487,27 +597,55 @@ function App() {
         )}
 
         {currentSection === "auth" && (
-          <motion.div className="section-stack" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-            <SettingsGroup title="Doubao Session" description="Login state and auth export">
+          <motion.div
+            className="section-stack"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <SettingsGroup
+              title="Doubao Session"
+              description="Login state and auth export"
+            >
               <SettingRow title="Status" description="Current auth file state">
                 <div className="inline-actions">
                   <span className="value-pill">{renderAuthStatus}</span>
-                  <button type="button" onClick={() => runAction(checkAuthStatus, writeLog)}>
+                  <button
+                    type="button"
+                    onClick={() => runAction(checkAuthStatus, writeLog)}
+                  >
                     Refresh
                   </button>
                 </div>
               </SettingRow>
-              <SettingRow title="Auth File" description="Where auth.json is stored" layout="stacked">
-                <div id="output-path" className="auth-path-display" title={authPath}>
+              <SettingRow
+                title="Auth File"
+                description="Where auth.json is stored"
+                layout="stacked"
+              >
+                <div
+                  id="output-path"
+                  className="auth-path-display"
+                  title={authPath}
+                >
                   {authPath || "Resolving default auth path..."}
                 </div>
               </SettingRow>
-              <SettingRow title="Login" description="Open Doubao and export current session">
+              <SettingRow
+                title="Login"
+                description="Open Doubao and export current session"
+              >
                 <div className="inline-actions">
-                  <button type="button" onClick={() => runAction(openLoginWindow, writeLog)}>
+                  <button
+                    type="button"
+                    onClick={() => runAction(openLoginWindow, writeLog)}
+                  >
                     Open Login
                   </button>
-                  <button className="primary" type="button" onClick={() => runAction(exportAuth, writeLog)}>
+                  <button
+                    className="primary"
+                    type="button"
+                    onClick={() => runAction(exportAuth, writeLog)}
+                  >
                     Export Auth
                   </button>
                 </div>
@@ -517,11 +655,18 @@ function App() {
         )}
 
         {currentSection === "diagnostics" && (
-          <motion.div className="section-stack" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <motion.div
+            className="section-stack"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
             <SettingsGroup title="Activity" description="Recent local events">
               <div className="diagnostics-body">
                 <div className="inline-actions diagnostics-actions">
-                  <button type="button" onClick={() => runAction(exportDiagnostics, writeLog)}>
+                  <button
+                    type="button"
+                    onClick={() => runAction(exportDiagnostics, writeLog)}
+                  >
                     Export Diagnostics
                   </button>
                 </div>
@@ -534,33 +679,55 @@ function App() {
         )}
 
         {currentSection === "about" && (
-          <motion.div className="section-stack" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-            <SettingsGroup title="Overview" description="Current runtime configuration">
+          <motion.div
+            className="section-stack"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <SettingsGroup
+              title="Overview"
+              description="Current runtime configuration"
+            >
               <SettingRow title="Version" description="Binary package version">
-                <span className="value-pill">{buildInfo?.version || "Unknown"}</span>
+                <span className="value-pill">
+                  {buildInfo?.version || "Unknown"}
+                </span>
               </SettingRow>
-              <SettingRow title="Commit" description="Source revision embedded at build time">
+              <SettingRow
+                title="Commit"
+                description="Source revision embedded at build time"
+              >
                 <span className="value-pill">{formatCommit(buildInfo)}</span>
               </SettingRow>
               <SettingRow title="Built" description="Build timestamp">
-                <span className="value-pill">{formatBuildTime(buildInfo?.buildUnixMs)}</span>
+                <span className="value-pill">
+                  {formatBuildTime(buildInfo?.buildUnixMs)}
+                </span>
               </SettingRow>
               <SettingRow title="Hotkey" description="Press-to-talk shortcut">
                 <span className="value-pill">{displayedHotkey}</span>
               </SettingRow>
-              <SettingRow title="Microphone" description="Selected recording input">
-                <span className="value-pill">{selectedDeviceLabel(deviceOptions, selectedDevice)}</span>
+              <SettingRow
+                title="Microphone"
+                description="Selected recording input"
+              >
+                <span className="value-pill">
+                  {selectedDeviceLabel(deviceOptions, selectedDevice)}
+                </span>
               </SettingRow>
               <SettingRow title="Input" description="Text insertion strategy">
                 <span className="value-pill">
-                  {inputMethodLabels[settings.inputMethod] || settings.inputMethod}
+                  {inputMethodLabels[settings.inputMethod] ||
+                    settings.inputMethod}
                 </span>
               </SettingRow>
               <SettingRow title="Auth" description="Authentication status">
                 <span className="value-pill">{renderAuthStatus}</span>
               </SettingRow>
               <SettingRow title="Target" description="Binary target triple">
-                <span className="value-pill">{buildInfo?.target || "Unknown"}</span>
+                <span className="value-pill">
+                  {buildInfo?.target || "Unknown"}
+                </span>
               </SettingRow>
             </SettingsGroup>
           </motion.div>
@@ -587,7 +754,9 @@ function OnboardingLoading({ appIcon }) {
     <main className="onboarding-shell">
       <section className="onboarding-card onboarding-loading">
         <div className="sidebar-brand onboarding-brand">
-          <div className="brand-mark">{appIcon ? <img src={appIcon} alt="Dou Voice" /> : "DV"}</div>
+          <div className="brand-mark">
+            {appIcon ? <img src={appIcon} alt="Dou Voice" /> : "DV"}
+          </div>
           <div>
             <strong>Dou Voice</strong>
             <span>Preparing setup</span>
@@ -621,7 +790,10 @@ function OnboardingWizard({
   const selectedDevice = draft.selectedInputDevice || "default";
   const steps = [
     { title: "Doubao Session", detail: authStatusLabel(auth) },
-    { title: "Input Basics", detail: selectedDeviceLabel(devices, selectedDevice) },
+    {
+      title: "Input Basics",
+      detail: selectedDeviceLabel(devices, selectedDevice),
+    },
     { title: "Press To Talk", detail: displayedHotkey },
     { title: "Ready Check", detail: authReady ? "Ready" : "Auth required" },
   ];
@@ -663,8 +835,15 @@ function OnboardingWizard({
               description="Sign in once, then export the local session used by speech recognition."
             >
               <div className="onboarding-status-grid">
-                <RuntimeLine label="Status" value={authStatusLabel(auth)} tone={authReady ? "ready" : "warning"} />
-                <RuntimeLine label="Auth File" value={authPath || "Resolving path..."} />
+                <RuntimeLine
+                  label="Status"
+                  value={authStatusLabel(auth)}
+                  tone={authReady ? "ready" : "warning"}
+                />
+                <RuntimeLine
+                  label="Auth File"
+                  value={authPath || "Resolving path..."}
+                />
               </div>
               <div className="onboarding-actions">
                 <button className="primary" type="button" onClick={onOpenLogin}>
@@ -693,14 +872,18 @@ function OnboardingWizard({
                     onChange={(event) =>
                       onDraftChange({
                         selectedInputDevice:
-                          event.target.value === "default" ? null : event.target.value,
+                          event.target.value === "default"
+                            ? null
+                            : event.target.value,
                       })
                     }
                   >
                     {devices.map((device) => (
                       <option key={device.id} value={device.id}>
                         {device.name}
-                        {device.isDefault && device.id !== "default" ? " (system default)" : ""}
+                        {device.isDefault && device.id !== "default"
+                          ? " (system default)"
+                          : ""}
                       </option>
                     ))}
                   </select>
@@ -709,7 +892,9 @@ function OnboardingWizard({
                   <select
                     id="onboarding-input-method"
                     value={draft.inputMethod}
-                    onChange={(event) => onDraftChange({ inputMethod: event.target.value })}
+                    onChange={(event) =>
+                      onDraftChange({ inputMethod: event.target.value })
+                    }
                   >
                     <option value="direct">Direct typing with fallback</option>
                     <option value="clipboardPaste">Clipboard paste</option>
@@ -720,13 +905,17 @@ function OnboardingWizard({
                     checked={draft.overlayEnabled !== false}
                     title="Overlay"
                     subtitle=""
-                    onChange={(checked) => onDraftChange({ overlayEnabled: checked })}
+                    onChange={(checked) =>
+                      onDraftChange({ overlayEnabled: checked })
+                    }
                   />
                   <Toggle
                     checked={draft.soundEnabled !== false}
                     title="Sound"
                     subtitle=""
-                    onChange={(checked) => onDraftChange({ soundEnabled: checked })}
+                    onChange={(checked) =>
+                      onDraftChange({ soundEnabled: checked })
+                    }
                   />
                 </div>
               </div>
@@ -739,8 +928,16 @@ function OnboardingWizard({
               description="The default is shared across platforms. Change it only if it conflicts with your workflow."
             >
               <div className="onboarding-hotkey">
-                <input readOnly spellCheck="false" value={capturingHotkey ? displayedHotkey : draft.hotkey} />
-                <button type="button" onClick={onHotkeyCapture} disabled={capturingHotkey}>
+                <input
+                  readOnly
+                  spellCheck="false"
+                  value={capturingHotkey ? displayedHotkey : draft.hotkey}
+                />
+                <button
+                  type="button"
+                  onClick={onHotkeyCapture}
+                  disabled={capturingHotkey}
+                >
                   Change
                 </button>
                 <button type="button" onClick={onDefaultHotkey}>
@@ -756,13 +953,29 @@ function OnboardingWizard({
               description="Save the setup, then use the test recording once before relying on the global hotkey."
             >
               <div className="onboarding-status-grid">
-                <RuntimeLine label="Auth" value={authStatusLabel(auth)} tone={authReady ? "ready" : "warning"} />
-                <RuntimeLine label="Microphone" value={selectedDeviceLabel(devices, selectedDevice)} />
+                <RuntimeLine
+                  label="Auth"
+                  value={authStatusLabel(auth)}
+                  tone={authReady ? "ready" : "warning"}
+                />
+                <RuntimeLine
+                  label="Microphone"
+                  value={selectedDeviceLabel(devices, selectedDevice)}
+                />
                 <RuntimeLine label="Hotkey" value={draft.hotkey} />
-                <RuntimeLine label="Insertion" value={inputMethodLabels[draft.inputMethod] || draft.inputMethod} />
+                <RuntimeLine
+                  label="Insertion"
+                  value={
+                    inputMethodLabels[draft.inputMethod] || draft.inputMethod
+                  }
+                />
               </div>
               <div className="onboarding-actions">
-                <button type="button" onClick={onTestRecording} disabled={!authReady}>
+                <button
+                  type="button"
+                  onClick={onTestRecording}
+                  disabled={!authReady}
+                >
                   Test Recording
                 </button>
               </div>
@@ -771,13 +984,21 @@ function OnboardingWizard({
         </div>
 
         <footer className="onboarding-foot">
-          <button type="button" onClick={() => onStepChange(active - 1)} disabled={active === 0}>
+          <button
+            type="button"
+            onClick={() => onStepChange(active - 1)}
+            disabled={active === 0}
+          >
             Back
           </button>
           <button
             className={active === steps.length - 1 ? "primary" : ""}
             type="button"
-            onClick={active === steps.length - 1 ? onFinish : () => onStepChange(active + 1)}
+            onClick={
+              active === steps.length - 1
+                ? onFinish
+                : () => onStepChange(active + 1)
+            }
             disabled={active === steps.length - 1 && !authReady}
           >
             {active === steps.length - 1 ? "Finish Setup" : "Next"}
@@ -852,7 +1073,11 @@ function Field({ label, htmlFor, className = "", children }) {
 function Toggle({ checked, title, subtitle, onChange }) {
   return (
     <label className="toggle-field">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <span>
         <strong>{title}</strong>
         <small>{subtitle}</small>
@@ -876,6 +1101,7 @@ function defaultSettings() {
     selectedInputDevice: null,
     soundEnabled: true,
     overlayEnabled: true,
+    microphoneAlwaysOn: false,
   };
 }
 
@@ -886,6 +1112,7 @@ function normalizeSettings(settings = {}) {
     selectedInputDevice: settings.selectedInputDevice || null,
     soundEnabled: settings.soundEnabled !== false,
     overlayEnabled: settings.overlayEnabled !== false,
+    microphoneAlwaysOn: settings.microphoneAlwaysOn === true,
   };
 }
 
@@ -898,7 +1125,9 @@ function normalizeVoiceStatus(status = {}) {
 }
 
 function normalizeDevices(items = []) {
-  const devices = items.length ? items : [{ id: "default", name: "Default", isDefault: true }];
+  const devices = items.length
+    ? items
+    : [{ id: "default", name: "Default", isDefault: true }];
   return devices.map((device) => ({
     id: device.id || device.name || "default",
     name: device.name || device.id || "Unknown",
@@ -907,9 +1136,15 @@ function normalizeDevices(items = []) {
 }
 
 function withSelectedDevice(devices, selected) {
-  const out = devices.length ? [...devices] : [{ id: "default", name: "Default", isDefault: true }];
+  const out = devices.length
+    ? [...devices]
+    : [{ id: "default", name: "Default", isDefault: true }];
   if (selected && !out.some((device) => device.id === selected)) {
-    out.push({ id: selected, name: `${selected} (unavailable)`, isDefault: false });
+    out.push({
+      id: selected,
+      name: `${selected} (unavailable)`,
+      isDefault: false,
+    });
   }
   return out;
 }
@@ -926,7 +1161,8 @@ function authStatusLabel(auth) {
 }
 
 function formatCommit(info) {
-  if (!info?.commitShortHash || info.commitShortHash === "unknown") return "Unknown";
+  if (!info?.commitShortHash || info.commitShortHash === "unknown")
+    return "Unknown";
   return `${info.commitShortHash}${info.gitDirty ? " (dirty)" : ""}`;
 }
 
@@ -1013,7 +1249,8 @@ function displayKeyForEvent(event) {
 
 const rootElement = document.querySelector("#root");
 if (!rootElement) {
-  document.body.textContent = "Dou Voice failed to initialize: missing root element.";
+  document.body.textContent =
+    "Dou Voice failed to initialize: missing root element.";
   throw new Error("missing #root element");
 }
 

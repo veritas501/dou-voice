@@ -53,6 +53,9 @@ pub(crate) struct DesktopState {
     pub(crate) settings: Mutex<AppSettings>,
     pub(crate) user_settings_exists: Mutex<bool>,
     pub(crate) hotkey: Mutex<HotkeyRuntimeState>,
+    /// 常开本地麦克风由独立线程持有，避免把 Windows 上非 Send 的 CPAL stream
+    /// 放进 Tauri 全局状态。
+    pub(crate) prewarmed_microphone: Mutex<Option<PrewarmedMicrophone>>,
 }
 
 impl Default for DesktopState {
@@ -66,6 +69,7 @@ impl Default for DesktopState {
             settings: Mutex::new(AppSettings::default()),
             user_settings_exists: Mutex::new(false),
             hotkey: Mutex::new(HotkeyRuntimeState::default()),
+            prewarmed_microphone: Mutex::new(None),
         }
     }
 }
@@ -97,6 +101,9 @@ pub(crate) struct AppSettings {
     pub(crate) sound_enabled: bool,
     #[serde(default = "default_enabled")]
     pub(crate) overlay_enabled: bool,
+    /// 仅保持本地输入流开启；空闲 PCM 会直接丢弃，不会上传到 ASR。
+    #[serde(default)]
+    pub(crate) microphone_always_on: bool,
 }
 
 impl Default for AppSettings {
@@ -107,6 +114,7 @@ impl Default for AppSettings {
             selected_input_device: None,
             sound_enabled: true,
             overlay_enabled: true,
+            microphone_always_on: false,
         }
     }
 }
@@ -328,6 +336,58 @@ pub(crate) struct AsrDebugLogState {
 }
 
 pub(crate) struct RecordingWorker {
-    pub(crate) stop_tx: mpsc::Sender<()>,
+    pub(crate) input_stop: RecordingInputStop,
     pub(crate) result_rx: mpsc::Receiver<Result<StreamingRecognitionResult, String>>,
+}
+
+impl RecordingWorker {
+    /// 停止本次录音的音频来源，并让 ASR PCM sender 被释放。
+    pub(crate) fn stop_input(&self) {
+        match &self.input_stop {
+            RecordingInputStop::OnDemand { stop_tx } => {
+                let _ = stop_tx.send(());
+            }
+            RecordingInputStop::Prewarmed {
+                control_tx,
+                generation,
+            } => {
+                let _ = control_tx.send(MicrophoneControl::Detach {
+                    generation: *generation,
+                });
+            }
+        }
+    }
+}
+
+/// 由录音 worker 持有的音频来源停止动作。
+pub(crate) enum RecordingInputStop {
+    /// 每次按键临时创建的 CPAL 输入流。
+    OnDemand { stop_tx: mpsc::Sender<()> },
+    /// 常开本地麦克风中的某次热键订阅。
+    Prewarmed {
+        control_tx: mpsc::Sender<MicrophoneControl>,
+        generation: u64,
+    },
+}
+
+/// 发往本次 ASR 的本地 PCM sender。
+pub(crate) type PcmSender = tokio::sync::mpsc::UnboundedSender<Vec<u8>>;
+
+/// 常开麦克风线程的控制消息。
+pub(crate) enum MicrophoneControl {
+    Attach {
+        pcm_tx: PcmSender,
+        response_tx: mpsc::SyncSender<Result<u64, String>>,
+    },
+    Detach {
+        generation: u64,
+    },
+    Stop,
+}
+
+/// 常开麦克风线程的句柄。实际 CPAL stream 始终留在该线程内。
+pub(crate) struct PrewarmedMicrophone {
+    pub(crate) control_tx: mpsc::Sender<MicrophoneControl>,
+    pub(crate) input_device: Option<String>,
+    pub(crate) join_handle: std::thread::JoinHandle<()>,
 }

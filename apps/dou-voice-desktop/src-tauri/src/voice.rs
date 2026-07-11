@@ -14,11 +14,12 @@ use crate::app_state::{
 use crate::diagnostics::emit_voice_debug;
 use crate::overlay::update_overlay_status;
 use crate::settings::{
-    current_auth_path, current_input_device, current_input_method, sound_enabled,
+    current_auth_path, current_input_device, current_input_method, microphone_always_on,
+    sound_enabled,
 };
 use crate::tray::update_tray_status;
 use crate::util::text_preview;
-use crate::voice_worker::spawn_streaming_recording_worker;
+use crate::voice_worker::spawn_hotkey_recording_worker;
 
 /// 读取当前语音输入状态，供主窗口首次加载时渲染。
 #[tauri::command]
@@ -114,7 +115,8 @@ fn start_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<(), String> {
 
     set_voice_status(app, "starting", "Starting recording.".to_string(), None);
     let input_device = current_input_device(app)?;
-    let worker = spawn_streaming_recording_worker(app.clone(), auth, input_device)?;
+    let worker =
+        spawn_hotkey_recording_worker(app.clone(), auth, input_device, microphone_always_on(app)?)?;
     {
         let state = app.state::<DesktopState>();
         let mut active = state
@@ -175,7 +177,7 @@ async fn finish_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<VoiceInput
         live_text,
     );
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let _ = recording.stop_tx.send(());
+        recording.stop_input();
         recording
             .result_rx
             .recv()
