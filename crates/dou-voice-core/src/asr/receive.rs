@@ -47,7 +47,8 @@ where
             break;
         };
 
-        let message = message.map_err(|error| asr_ws_error("Receive ASR WebSocket message", &error))?;
+        let message =
+            message.map_err(|error| asr_ws_error("Receive ASR WebSocket message", &error))?;
         match message {
             Message::Text(text) => {
                 if let Some(event) = parse_server_event(&text)? {

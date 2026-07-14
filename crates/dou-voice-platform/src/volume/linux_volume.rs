@@ -147,8 +147,7 @@ fn set_output_volume_scalar(level: f32) -> Result<(), String> {
 /// `wpctl get-volume @DEFAULT_AUDIO_SINK@` → `Volume: 0.80` / `Volume: 0.80 [MUTED]`
 fn read_wpctl_volume() -> Result<f32, String> {
     let text = run_command("wpctl", &["get-volume", "@DEFAULT_AUDIO_SINK@"])?;
-    parse_wpctl_volume(&text)
-        .ok_or_else(|| format!("could not parse wpctl volume from `{text}`"))
+    parse_wpctl_volume(&text).ok_or_else(|| format!("could not parse wpctl volume from `{text}`"))
 }
 
 fn set_wpctl_volume(level: f32) -> Result<(), String> {

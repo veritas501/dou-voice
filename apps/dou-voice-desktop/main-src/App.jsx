@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { motion } from "framer-motion";
 
 import { command, listen } from "../web/scripts/tauri-api.js";
+import { useContentFitWindow } from "./useContentFitWindow.js";
 
 const DEFAULT_HOTKEY = "Ctrl+Q";
 const MODIFIER_KEYS = ["Control", "Alt", "Shift", "Meta"];
@@ -60,6 +61,12 @@ function App() {
   const previousHotkeyRef = useRef(DEFAULT_HOTKEY);
   const settingsRef = useRef(settings);
   const logRef = useRef(null);
+  // 仅做窗口高度适配；不改 document overflow，避免白屏
+  const mainFitRef = useContentFitWindow(
+    onboardingRequired === false,
+    `${currentSection}:${volumeDuckSupported}`,
+  );
+  const loadingFitRef = useContentFitWindow(onboardingRequired === null);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -380,7 +387,7 @@ function App() {
     sections.find((section) => section.id === currentSection) || sections[0];
 
   if (onboardingRequired === null) {
-    return <OnboardingLoading appIcon={appIcon} />;
+    return <OnboardingLoading appIcon={appIcon} fitRef={loadingFitRef} />;
   }
 
   if (onboardingRequired) {
@@ -411,7 +418,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main ref={mainFitRef} className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
           <div className="brand-mark">
@@ -777,9 +784,9 @@ function SettingsGroup({ title, description, children }) {
   );
 }
 
-function OnboardingLoading({ appIcon }) {
+function OnboardingLoading({ appIcon, fitRef = null }) {
   return (
-    <main className="onboarding-shell">
+    <main ref={fitRef} className="onboarding-shell">
       <section className="onboarding-card onboarding-loading">
         <div className="sidebar-brand onboarding-brand">
           <div className="brand-mark">
@@ -827,9 +834,13 @@ function OnboardingWizard({
     { title: "Ready Check", detail: authReady ? "Ready" : "Auth required" },
   ];
   const active = Math.max(0, Math.min(step, steps.length - 1));
+  const wizardFitRef = useContentFitWindow(
+    true,
+    `${step}:${volumeDuckSupported}:${Array.isArray(devices) ? devices.length : 0}:${displayedHotkey}:${capturingHotkey}`,
+  );
 
   return (
-    <main className="onboarding-shell">
+    <main ref={wizardFitRef} className="onboarding-shell">
       <section className="onboarding-card">
         <header className="onboarding-head">
           <div className="sidebar-brand onboarding-brand">

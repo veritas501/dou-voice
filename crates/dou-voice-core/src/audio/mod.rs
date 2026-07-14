@@ -95,7 +95,9 @@ impl ActiveRecording {
         let recorded = samples
             .lock()
             .map_err(|_| {
-                CoreError::AudioUnavailable("Internal microphone buffer state is corrupted (mutex poisoned)".to_string())
+                CoreError::AudioUnavailable(
+                    "Internal microphone buffer state is corrupted (mutex poisoned)".to_string(),
+                )
             })?
             .clone();
         if recorded.is_empty() {

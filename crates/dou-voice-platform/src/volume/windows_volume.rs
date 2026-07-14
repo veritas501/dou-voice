@@ -11,9 +11,7 @@ use std::sync::Mutex;
 
 use windows::Win32::Foundation::{RPC_E_CHANGED_MODE, S_FALSE};
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-use windows::Win32::Media::Audio::{
-    eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
-};
+use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
@@ -184,9 +182,7 @@ fn default_render_volume() -> Result<IAudioEndpointVolume, String> {
         device
             .Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)
             .map_err(|error| {
-                format!(
-                    "Could not open volume control for the default playback device: {error}"
-                )
+                format!("Could not open volume control for the default playback device: {error}")
             })
     }
 }

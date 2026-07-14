@@ -22,14 +22,14 @@ mod linux_volume;
 #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 mod unsupported_volume;
 
-#[cfg(windows)]
-use windows_volume as platform;
-#[cfg(target_os = "macos")]
-use macos_volume as platform;
 #[cfg(target_os = "linux")]
 use linux_volume as platform;
+#[cfg(target_os = "macos")]
+use macos_volume as platform;
 #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
 use unsupported_volume as platform;
+#[cfg(windows)]
+use windows_volume as platform;
 
 /// 默认压低到当前主音量的比例（0.0–1.0）。
 ///

@@ -23,13 +23,13 @@ pub use config::AsrClientConfig;
 #[cfg(test)]
 use config::{encode_query_value, VOICEGENIE_END_ASR};
 use config::{AsrWireProtocol, VOICEGENIE_FINISH_SESSION};
+use error_map::{asr_connection_error, asr_ws_error};
 pub use event::{transcript_text_from_events, AsrEvent};
 pub use options::PcmTranscribeOptions;
 #[cfg(test)]
 use parser::{parse_binary_server_event, parse_server_event, parse_voicegenie_envelope};
 #[cfg(test)]
 use protocol::{encode_voicegenie_client_event, encode_voicegenie_task_request};
-use error_map::{asr_connection_error, asr_ws_error};
 use receive::{emit_observer_event, receive_asr_events};
 use send::{send_legacy_pcm_once, send_pcm_chunks, send_pcm_stream};
 #[cfg(test)]

@@ -119,10 +119,9 @@ fn start_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<(), String> {
         spawn_hotkey_recording_worker(app.clone(), auth, input_device, microphone_always_on(app)?)?;
     {
         let state = app.state::<DesktopState>();
-        let mut active = state
-            .active_recording
-            .lock()
-            .map_err(|_| "Internal active-recording state is corrupted (mutex poisoned)".to_string())?;
+        let mut active = state.active_recording.lock().map_err(|_| {
+            "Internal active-recording state is corrupted (mutex poisoned)".to_string()
+        })?;
         *active = Some(worker);
     }
     set_voice_status(
@@ -153,14 +152,15 @@ pub(crate) async fn finish_hotkey_recording(
 async fn finish_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<VoiceInputResult, String> {
     let recording = {
         let state = app.state::<DesktopState>();
-        let mut active = state
-            .active_recording
-            .lock()
-            .map_err(|_| "Internal active-recording state is corrupted (mutex poisoned)".to_string())?;
+        let mut active = state.active_recording.lock().map_err(|_| {
+            "Internal active-recording state is corrupted (mutex poisoned)".to_string()
+        })?;
         active.take()
     };
     let Some(recording) = recording else {
-        return Err("No active recording to finish (hotkey release without a started session)".to_string());
+        return Err(
+            "No active recording to finish (hotkey release without a started session)".to_string(),
+        );
     };
 
     let live_text = current_voice_text(app);
@@ -282,8 +282,9 @@ fn type_text_to_focused_window(app: &AppHandle<Wry>, text: &str) -> Result<(), S
             .map_err(|error| format!("Could not copy recognized text to the clipboard: {error}"))?
     } else {
         // 默认"直接"模式：分层 fallback，最后一层是剪贴板。
-        dou_voice_platform::input::type_text(text)
-            .map_err(|error| format!("Could not type recognized text into the focused window: {error}"))?
+        dou_voice_platform::input::type_text(text).map_err(|error| {
+            format!("Could not type recognized text into the focused window: {error}")
+        })?
     };
 
     match outcome.method {
@@ -358,7 +359,10 @@ fn begin_voice_input(app: &AppHandle<Wry>) -> Result<(), String> {
             .lock()
             .map_err(|_| "Internal voice busy state is corrupted (mutex poisoned)".to_string())?;
         if *busy {
-            return Err("Voice input is already running; wait for the current session to finish".to_string());
+            return Err(
+                "Voice input is already running; wait for the current session to finish"
+                    .to_string(),
+            );
         }
         *busy = true;
     }

@@ -224,9 +224,9 @@ pub(crate) fn spawn_streaming_recording_worker(
         }
     });
 
-    ready_rx
-        .recv()
-        .map_err(|_| "Recording worker failed to start (no ready signal from the audio thread)".to_string())??;
+    ready_rx.recv().map_err(|_| {
+        "Recording worker failed to start (no ready signal from the audio thread)".to_string()
+    })??;
     Ok(RecordingWorker {
         input_stop: RecordingInputStop::OnDemand { stop_tx },
         result_rx,

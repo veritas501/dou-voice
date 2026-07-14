@@ -108,7 +108,8 @@ where
                     "ASR WebSocket closed during VoiceGenie session setup".to_string(),
                 ));
             };
-            let message = message.map_err(|error| asr_ws_error("Receive VoiceGenie session event", &error))?;
+            let message = message
+                .map_err(|error| asr_ws_error("Receive VoiceGenie session event", &error))?;
             let Message::Binary(data) = message else {
                 continue;
             };
@@ -125,7 +126,10 @@ where
                         .clone()
                         .unwrap_or_else(|| "VoiceGenie session failed".to_string())
                 });
-                return Err(asr_connection_error("VoiceGenie session setup failed", detail));
+                return Err(asr_connection_error(
+                    "VoiceGenie session setup failed",
+                    detail,
+                ));
             }
             if envelope.event.as_deref() == Some(expected_event) {
                 return Ok(envelope);

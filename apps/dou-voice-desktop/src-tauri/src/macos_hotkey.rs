@@ -100,7 +100,9 @@ fn run_event_tap(
             CFMachPort::invalidate(&tap);
             let _ = Arc::from_raw(state_ptr as *const Mutex<MacHotkeyState>);
         }
-        let _ = init_tx.send(Err("Could not get the current macOS hotkey run loop".to_string()));
+        let _ = init_tx.send(Err(
+            "Could not get the current macOS hotkey run loop".to_string()
+        ));
         return;
     };
 

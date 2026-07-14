@@ -95,7 +95,10 @@ pub(crate) async fn export_auth(
     let output_path = PathBuf::from(output_path);
     let store = AuthParamsStore::new(&output_path);
     store.save(&params).map_err(|error| {
-        format!("Could not write auth file {}: {error}", output_path.display())
+        format!(
+            "Could not write auth file {}: {error}",
+            output_path.display()
+        )
     })?;
     {
         let desktop_state = app.state::<DesktopState>();
@@ -211,7 +214,8 @@ fn local_storage_capture_script(request_id: &str) -> String {
   window.location.href = "https://{capture_host}{capture_path}?payload=" + encoded;
 }})();
 "#,
-        request_id_json = serde_json::to_string(request_id).unwrap_or_else(|_| format!("\"{}\"", request_id)),
+        request_id_json =
+            serde_json::to_string(request_id).unwrap_or_else(|_| format!("\"{}\"", request_id)),
         capture_host = CAPTURE_HOST,
         capture_path = CAPTURE_PATH
     )

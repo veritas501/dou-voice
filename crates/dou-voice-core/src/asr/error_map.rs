@@ -83,18 +83,18 @@ fn classify_io(context: &str, error: &std::io::Error) -> CoreError {
         ErrorKind::ConnectionRefused => CoreError::AsrConnection(format!(
             "{context}: connection refused by ASR host. Check network/firewall settings."
         )),
-        ErrorKind::ConnectionReset => CoreError::AsrConnection(format!(
-            "{context}: connection reset while talking to ASR"
-        )),
-        ErrorKind::NotConnected => CoreError::AsrConnection(format!(
-            "{context}: socket is not connected to ASR"
-        )),
+        ErrorKind::ConnectionReset => {
+            CoreError::AsrConnection(format!("{context}: connection reset while talking to ASR"))
+        }
+        ErrorKind::NotConnected => {
+            CoreError::AsrConnection(format!("{context}: socket is not connected to ASR"))
+        }
         ErrorKind::BrokenPipe => CoreError::AsrConnection(format!(
             "{context}: connection broken while sending audio to ASR"
         )),
-        ErrorKind::UnexpectedEof => CoreError::AsrConnection(format!(
-            "{context}: ASR closed the connection unexpectedly"
-        )),
+        ErrorKind::UnexpectedEof => {
+            CoreError::AsrConnection(format!("{context}: ASR closed the connection unexpectedly"))
+        }
         _ => {
             // DNS / host lookup often surfaces as custom or uncategorized IO errors.
             classify_message(context, &error.to_string())
@@ -185,9 +185,7 @@ fn classify_message(context: &str, raw: &str) -> CoreError {
             "httparse",
         ],
     ) {
-        return CoreError::AsrConnection(format!(
-            "{context}: ASR protocol/parse error. ({raw})"
-        ));
+        return CoreError::AsrConnection(format!("{context}: ASR protocol/parse error. ({raw})"));
     }
 
     CoreError::AsrConnection(format!("{context}: {raw}"))

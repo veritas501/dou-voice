@@ -48,8 +48,7 @@ pub fn restore_output_volume() -> Result<bool, String> {
         return Ok(false);
     };
 
-    let previous_percent =
-        (previous.clamp(0.0, 1.0) * 100.0).round().clamp(0.0, 100.0) as u32;
+    let previous_percent = (previous.clamp(0.0, 1.0) * 100.0).round().clamp(0.0, 100.0) as u32;
     if let Err(error) = set_output_volume_percent(previous_percent) {
         // 恢复失败：把原值塞回，下次 finish/quit 还能再试。
         if let Err(store_error) = store_ducked_volume(previous) {

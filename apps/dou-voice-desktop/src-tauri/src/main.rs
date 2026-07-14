@@ -32,7 +32,7 @@ use settings::{
 };
 use tray::setup_tray;
 use voice::{get_voice_status, record_once_and_type};
-use window::should_hide_on_close;
+use window::{fit_main_window, should_hide_on_close};
 
 use tauri::WindowEvent;
 
@@ -90,7 +90,8 @@ fn main() {
             check_auth_status,
             begin_hotkey_capture,
             end_hotkey_capture,
-            normalize_hotkey_candidate
+            normalize_hotkey_candidate,
+            fit_main_window
         ])
         .run(tauri::generate_context!())
         .expect("Dou Voice failed to start. Check WebView2 runtime, display, and app logs.");

@@ -130,10 +130,9 @@ pub(crate) fn save_settings(
             .lock()
             .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())?;
         *latest = settings.clone();
-        let mut user_settings_exists = state
-            .user_settings_exists
-            .lock()
-            .map_err(|_| "Internal user-settings state is corrupted (mutex poisoned)".to_string())?;
+        let mut user_settings_exists = state.user_settings_exists.lock().map_err(|_| {
+            "Internal user-settings state is corrupted (mutex poisoned)".to_string()
+        })?;
         *user_settings_exists = true;
     }
     if !settings.overlay_enabled {
