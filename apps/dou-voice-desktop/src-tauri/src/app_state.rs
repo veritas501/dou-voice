@@ -104,6 +104,11 @@ pub(crate) struct AppSettings {
     /// 仅保持本地输入流开启；空闲 PCM 会直接丢弃，不会上传到 ASR。
     #[serde(default)]
     pub(crate) microphone_always_on: bool,
+    /// 语音输入期间自动降低系统输出音量，结束后恢复。
+    ///
+    /// Windows / macOS / Linux 支持；其余平台默认 false，sanitize 也会强制关闭。
+    #[serde(default = "default_duck_output_volume")]
+    pub(crate) duck_output_volume: bool,
 }
 
 impl Default for AppSettings {
@@ -115,6 +120,7 @@ impl Default for AppSettings {
             sound_enabled: true,
             overlay_enabled: true,
             microphone_always_on: false,
+            duck_output_volume: default_duck_output_volume(),
         }
     }
 }
@@ -131,6 +137,11 @@ fn default_enabled() -> bool {
     true
 }
 
+/// 系统音量 duck 在已实现平台上默认开启。
+fn default_duck_output_volume() -> bool {
+    cfg!(any(windows, target_os = "macos", target_os = "linux"))
+}
+
 /// 设置页渲染所需快照。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,6 +149,8 @@ pub(crate) struct SettingsSnapshot {
     pub(crate) settings: AppSettings,
     pub(crate) auth: AuthStatusResult,
     pub(crate) onboarding_required: bool,
+    /// 当前平台是否支持系统输出音量 duck；前端据此隐藏开关。
+    pub(crate) volume_duck_supported: bool,
 }
 
 /// 设置页展示的录音输入设备。

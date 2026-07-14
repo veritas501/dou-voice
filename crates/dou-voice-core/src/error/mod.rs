@@ -36,19 +36,25 @@ impl Display for CoreError {
     /// 输出稳定英文错误消息，供桌面日志和 UI 状态直接展示。
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io(message) => write!(f, "io error: {message}"),
-            Self::Json(message) => write!(f, "json error: {message}"),
+            Self::Io(message) => write!(f, "File/IO error: {message}"),
+            Self::Json(message) => write!(f, "JSON error: {message}"),
             Self::InvalidState { current, command } => {
                 write!(
                     f,
-                    "invalid state transition: {current} cannot handle {command}"
+                    "Invalid state transition: {current} cannot handle {command}"
                 )
             }
-            Self::MissingAuth => write!(f, "missing auth parameters"),
-            Self::InvalidAuth(message) => write!(f, "invalid auth parameters: {message}"),
-            Self::AudioUnavailable(message) => write!(f, "audio unavailable: {message}"),
-            Self::AsrConnection(message) => write!(f, "asr connection error: {message}"),
-            Self::AuthExpired => write!(f, "auth parameters expired"),
+            Self::MissingAuth => {
+                write!(f, "Missing auth parameters (auth.json not found or empty)")
+            }
+            Self::InvalidAuth(message) => write!(f, "Invalid auth parameters: {message}"),
+            Self::AudioUnavailable(message) => {
+                write!(f, "Microphone/audio unavailable: {message}")
+            }
+            Self::AsrConnection(message) => write!(f, "ASR connection error: {message}"),
+            Self::AuthExpired => {
+                write!(f, "Auth expired; open login and export a fresh session")
+            }
         }
     }
 }

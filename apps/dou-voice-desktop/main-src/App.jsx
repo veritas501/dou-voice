@@ -54,6 +54,7 @@ function App() {
   const [awaitingHotkeyRelease, setAwaitingHotkeyRelease] = useState(false);
   const [currentSection, setCurrentSection] = useState("general");
   const [onboardingRequired, setOnboardingRequired] = useState(null);
+  const [volumeDuckSupported, setVolumeDuckSupported] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [onboardingDraft, setOnboardingDraft] = useState(defaultSettings());
   const previousHotkeyRef = useRef(DEFAULT_HOTKEY);
@@ -82,9 +83,13 @@ function App() {
 
   const saveSettings = useCallback(
     async (nextSettings, message = "Settings saved.") => {
-      const sanitized = normalizeSettings(nextSettings);
+      const sanitized = normalizeSettings(nextSettings, { volumeDuckSupported });
       const snapshot = await command("save_settings", { settings: sanitized });
-      const saved = normalizeSettings(snapshot.settings || sanitized);
+      const supported = Boolean(snapshot.volumeDuckSupported);
+      setVolumeDuckSupported(supported);
+      const saved = normalizeSettings(snapshot.settings || sanitized, {
+        volumeDuckSupported: supported,
+      });
       setSettings(saved);
       setOnboardingDraft(saved);
       setAuth(snapshot.auth || null);
@@ -95,7 +100,7 @@ function App() {
       );
       return saved;
     },
-    [writeLog],
+    [volumeDuckSupported, writeLog],
   );
 
   useEffect(() => {
@@ -104,36 +109,40 @@ function App() {
         setAuthPath(path);
         writeLog(`Default auth path: ${path}`);
       })
-      .catch((error) => writeLog(`Default auth path failed: ${error}`));
+      .catch((error) => writeLog(`Could not resolve default auth path: ${formatError(error)}`));
 
     command("get_app_icon_data_url")
       .then(setAppIcon)
-      .catch((error) => writeLog(`Read app icon failed: ${error}`));
+      .catch((error) => writeLog(`Could not read app icon: ${formatError(error)}`));
 
     command("get_app_build_info")
       .then(setBuildInfo)
-      .catch((error) => writeLog(`Read build info failed: ${error}`));
+      .catch((error) => writeLog(`Could not read build info: ${formatError(error)}`));
 
     command("get_voice_status")
       .then((status) => setVoiceStatus(normalizeVoiceStatus(status)))
-      .catch((error) => writeLog(`Read status failed: ${error}`));
+      .catch((error) => writeLog(`Could not read voice status: ${formatError(error)}`));
 
     command("get_settings")
       .then((snapshot) => {
-        const loadedSettings = normalizeSettings(snapshot.settings);
+        const supported = Boolean(snapshot.volumeDuckSupported);
+        setVolumeDuckSupported(supported);
+        const loadedSettings = normalizeSettings(snapshot.settings, {
+          volumeDuckSupported: supported,
+        });
         setSettings(loadedSettings);
         setOnboardingDraft(loadedSettings);
         setAuth(snapshot.auth || null);
         setOnboardingRequired(Boolean(snapshot.onboardingRequired));
       })
       .catch((error) => {
-        writeLog(`Read settings failed: ${error}`);
+        writeLog(`Could not read settings: ${formatError(error)}`);
         setOnboardingRequired(false);
       });
 
     command("get_available_input_devices")
       .then((items) => setDevices(normalizeDevices(items)))
-      .catch((error) => writeLog(`Read microphones failed: ${error}`));
+      .catch((error) => writeLog(`Could not list microphones: ${formatError(error)}`));
 
     let active = true;
     let unlisten;
@@ -334,7 +343,10 @@ function App() {
 
   function updateSetting(patch, message) {
     const previous = settingsRef.current;
-    const next = normalizeSettings({ ...settingsRef.current, ...patch });
+    const next = normalizeSettings(
+      { ...settingsRef.current, ...patch },
+      { volumeDuckSupported },
+    );
     setSettings(next);
     saveSettings(next, message).catch((error) => {
       setSettings(previous);
@@ -345,7 +357,7 @@ function App() {
 
   function updateOnboardingDraft(patch) {
     setOnboardingDraft((current) =>
-      normalizeSettings({ ...current, ...patch }),
+      normalizeSettings({ ...current, ...patch }, { volumeDuckSupported }),
     );
   }
 
@@ -379,6 +391,7 @@ function App() {
         authPath={authPath}
         devices={deviceOptions}
         draft={onboardingDraft}
+        volumeDuckSupported={volumeDuckSupported}
         displayedHotkey={
           capturingHotkey ? displayedHotkey : onboardingDraft.hotkey
         }
@@ -592,6 +605,21 @@ function App() {
                   }
                 />
               </SettingRow>
+              {volumeDuckSupported && (
+                <SettingRow
+                  title="Lower volume while recording"
+                  description="Temporarily reduce system playback volume during voice input, then restore it"
+                >
+                  <Toggle
+                    checked={settings.duckOutputVolume !== false}
+                    title="Duck volume"
+                    subtitle=""
+                    onChange={(checked) =>
+                      updateSetting({ duckOutputVolume: checked }, "Volume duck setting saved.")
+                    }
+                  />
+                </SettingRow>
+              )}
             </SettingsGroup>
           </motion.div>
         )}
@@ -773,6 +801,7 @@ function OnboardingWizard({
   authPath,
   devices,
   draft,
+  volumeDuckSupported = false,
   displayedHotkey,
   capturingHotkey,
   step,
@@ -1090,8 +1119,25 @@ async function runAction(action, writeLog) {
   try {
     await action();
   } catch (error) {
-    writeLog(String(error));
+    writeLog(formatError(error));
   }
+}
+
+/** Normalize Tauri/JS errors into a readable English log line. */
+function formatError(error) {
+  if (error == null) return "Unknown error";
+  if (typeof error === "string") return error;
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object") {
+    if (typeof error.message === "string" && error.message) return error.message;
+    if (typeof error.error === "string" && error.error) return error.error;
+    try {
+      return JSON.stringify(error);
+    } catch (_) {
+      return String(error);
+    }
+  }
+  return String(error);
 }
 
 function defaultSettings() {
@@ -1102,10 +1148,12 @@ function defaultSettings() {
     soundEnabled: true,
     overlayEnabled: true,
     microphoneAlwaysOn: false,
+    // 非支持平台由 volumeDuckSupported 归一化关闭。
+    duckOutputVolume: false,
   };
 }
 
-function normalizeSettings(settings = {}) {
+function normalizeSettings(settings = {}, { volumeDuckSupported = false } = {}) {
   return {
     hotkey: settings.hotkey || DEFAULT_HOTKEY,
     inputMethod: settings.inputMethod || "direct",
@@ -1113,6 +1161,8 @@ function normalizeSettings(settings = {}) {
     soundEnabled: settings.soundEnabled !== false,
     overlayEnabled: settings.overlayEnabled !== false,
     microphoneAlwaysOn: settings.microphoneAlwaysOn === true,
+    // 非支持平台强制关闭，避免 UI 误开后无效。
+    duckOutputVolume: volumeDuckSupported && settings.duckOutputVolume !== false,
   };
 }
 

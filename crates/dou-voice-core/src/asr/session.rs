@@ -11,6 +11,7 @@ use super::config::{
     VOICEGENIE_START_SESSION, VOICEGENIE_START_TASK, VOICEGENIE_TASK_FAILED,
     VOICEGENIE_TASK_STARTED,
 };
+use super::error_map::{asr_connection_error, asr_ws_error};
 use super::options::PcmTranscribeOptions;
 use super::parser::{parse_voicegenie_envelope, VoiceGenieEnvelope};
 use super::protocol::encode_voicegenie_client_event;
@@ -37,7 +38,7 @@ where
         wait_for_voicegenie_event(reader, VOICEGENIE_TASK_STARTED, options.receive_timeout_ms)
             .await?;
     let task_id = task_started.task_id.ok_or_else(|| {
-        CoreError::AsrConnection("VoiceGenie TaskStarted missing task_id".to_string())
+        CoreError::AsrConnection("VoiceGenie TaskStarted response is missing task_id".to_string())
     })?;
 
     let session_payload = voicegenie_asr_session_payload(auth);
@@ -89,7 +90,7 @@ where
     socket
         .send(Message::Binary(message.into()))
         .await
-        .map_err(|error| CoreError::AsrConnection(error.to_string()))
+        .map_err(|error| asr_connection_error("Send VoiceGenie control event", error))
 }
 
 async fn wait_for_voicegenie_event<S>(
@@ -104,10 +105,10 @@ where
         loop {
             let Some(message) = socket.next().await else {
                 return Err(CoreError::AsrConnection(
-                    "VoiceGenie WebSocket closed during session setup".to_string(),
+                    "ASR WebSocket closed during VoiceGenie session setup".to_string(),
                 ));
             };
-            let message = message.map_err(|error| CoreError::AsrConnection(error.to_string()))?;
+            let message = message.map_err(|error| asr_ws_error("Receive VoiceGenie session event", &error))?;
             let Message::Binary(data) = message else {
                 continue;
             };
@@ -118,14 +119,13 @@ where
                 envelope.event.as_deref(),
                 Some(VOICEGENIE_SESSION_FAILED) | Some(VOICEGENIE_TASK_FAILED)
             ) {
-                return Err(CoreError::AsrConnection(
-                    envelope.status_text.unwrap_or_else(|| {
-                        envelope
-                            .event
-                            .clone()
-                            .unwrap_or_else(|| "VoiceGenie session failed".to_string())
-                    }),
-                ));
+                let detail = envelope.status_text.unwrap_or_else(|| {
+                    envelope
+                        .event
+                        .clone()
+                        .unwrap_or_else(|| "VoiceGenie session failed".to_string())
+                });
+                return Err(asr_connection_error("VoiceGenie session setup failed", detail));
             }
             if envelope.event.as_deref() == Some(expected_event) {
                 return Ok(envelope);
@@ -136,7 +136,7 @@ where
     timeout(Duration::from_millis(timeout_ms), wait)
         .await
         .map_err(|_| {
-            CoreError::AsrConnection(format!("timed out waiting for VoiceGenie {expected_event}"))
+            CoreError::AsrConnection(format!("Timed out after {timeout_ms}ms waiting for VoiceGenie event `{expected_event}` during session setup"))
         })?
 }
 

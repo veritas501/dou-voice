@@ -28,18 +28,19 @@ pub(crate) fn get_settings(app: AppHandle<Wry>) -> Result<SettingsSnapshot, Stri
     let settings = state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())?
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())?
         .clone();
     let user_settings_exists = state
         .user_settings_exists
         .lock()
-        .map_err(|_| "user settings state poisoned".to_string())
+        .map_err(|_| "Internal user-settings state is corrupted (mutex poisoned)".to_string())
         .map(|exists| *exists)?;
 
     Ok(SettingsSnapshot {
         settings,
         auth: auth_status_result(&app)?,
         onboarding_required: !user_settings_exists,
+        volume_duck_supported: dou_voice_platform::volume::is_supported(),
     })
 }
 
@@ -54,7 +55,7 @@ pub(crate) fn get_available_input_devices() -> Result<Vec<AudioInputDeviceResult
 
     devices.extend(
         dou_voice_core::list_input_devices()
-            .map_err(|error| format!("failed to list input devices: {error}"))?
+            .map_err(|error| format!("Could not list microphone input devices: {error}"))?
             .into_iter()
             .map(|device| AudioInputDeviceResult {
                 id: device.name.clone(),
@@ -78,7 +79,7 @@ pub(crate) fn save_settings(
         let latest = state
             .settings
             .lock()
-            .map_err(|_| "settings state poisoned".to_string())?;
+            .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())?;
         latest.clone()
     };
     let hotkey_changed = previous_settings.hotkey != settings.hotkey;
@@ -127,12 +128,12 @@ pub(crate) fn save_settings(
         let mut latest = state
             .settings
             .lock()
-            .map_err(|_| "settings state poisoned".to_string())?;
+            .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())?;
         *latest = settings.clone();
         let mut user_settings_exists = state
             .user_settings_exists
             .lock()
-            .map_err(|_| "user settings state poisoned".to_string())?;
+            .map_err(|_| "Internal user-settings state is corrupted (mutex poisoned)".to_string())?;
         *user_settings_exists = true;
     }
     if !settings.overlay_enabled {
@@ -143,6 +144,7 @@ pub(crate) fn save_settings(
         settings,
         auth: auth_status_result(&app)?,
         onboarding_required: false,
+        volume_duck_supported: dou_voice_platform::volume::is_supported(),
     })
 }
 
@@ -151,7 +153,7 @@ pub(crate) fn default_auth_path(app: &AppHandle<Wry>) -> Result<PathBuf, String>
     app.path()
         .app_config_dir()
         .map(|dir| dir.join(AUTH_FILE_NAME))
-        .map_err(|error| format!("failed to resolve app config directory: {error}"))
+        .map_err(|error| format!("Could not resolve app config directory: {error}"))
 }
 
 /// 解析桌面端设置文件路径。
@@ -159,7 +161,7 @@ fn settings_path(app: &AppHandle<Wry>) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
         .map(|dir| dir.join(SETTINGS_FILE_NAME))
-        .map_err(|error| format!("failed to resolve app config directory: {error}"))
+        .map_err(|error| format!("Could not resolve app config directory: {error}"))
 }
 
 /// 生成诊断文件输出路径。
@@ -170,7 +172,7 @@ pub(crate) fn diagnostics_output_path(app: &AppHandle<Wry>) -> Result<PathBuf, S
             dir.join("diagnostics")
                 .join(format!("diagnostics-{}.json", unix_time_ms()))
         })
-        .map_err(|error| format!("failed to resolve diagnostics directory: {error}"))
+        .map_err(|error| format!("Could not resolve diagnostics directory: {error}"))
 }
 
 /// 启动时把默认 auth 路径写入运行态。
@@ -180,7 +182,7 @@ pub(crate) fn initialize_default_auth_path(app: &AppHandle<Wry>) -> Result<(), S
     let mut auth_path = state
         .auth_path
         .lock()
-        .map_err(|_| "desktop auth path state poisoned".to_string())?;
+        .map_err(|_| "Internal auth path state is corrupted (mutex poisoned)".to_string())?;
     *auth_path = path;
     Ok(())
 }
@@ -192,12 +194,12 @@ pub(crate) fn initialize_settings(app: &AppHandle<Wry>) -> Result<(), String> {
     let mut latest = state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())?;
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())?;
     *latest = loaded.settings;
     let mut user_settings_exists = state
         .user_settings_exists
         .lock()
-        .map_err(|_| "user settings state poisoned".to_string())?;
+        .map_err(|_| "Internal user-settings state is corrupted (mutex poisoned)".to_string())?;
     *user_settings_exists = loaded.exists;
     Ok(())
 }
@@ -270,12 +272,12 @@ pub(crate) fn save_settings_file(
     let path = settings_path(app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
-            .map_err(|error| format!("failed to create settings directory: {error}"))?;
+            .map_err(|error| format!("Could not create settings directory: {error}"))?;
     }
 
     let data = serde_json::to_vec_pretty(settings)
-        .map_err(|error| format!("failed to serialize settings: {error}"))?;
-    fs::write(&path, data).map_err(|error| format!("failed to write settings: {error}"))
+        .map_err(|error| format!("Could not serialize settings JSON: {error}"))?;
+    fs::write(&path, data).map_err(|error| format!("Could not write settings file: {error}"))
 }
 
 pub(crate) fn sanitize_settings(mut settings: AppSettings) -> AppSettings {
@@ -298,6 +300,10 @@ pub(crate) fn sanitize_settings(mut settings: AppSettings) -> AppSettings {
         .map(str::trim)
         .filter(|device| !device.is_empty() && *device != "default")
         .map(str::to_string);
+    // 非支持平台尚未实现系统音量 duck，强制关闭，避免无效开关误导用户。
+    if !dou_voice_platform::volume::is_supported() {
+        settings.duck_output_volume = false;
+    }
     settings
 }
 
@@ -307,7 +313,7 @@ pub(crate) fn current_hotkey(app: &AppHandle<Wry>) -> Result<String, String> {
     state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())
         .map(|settings| settings.hotkey.clone())
 }
 
@@ -317,7 +323,7 @@ pub(crate) fn current_input_method(app: &AppHandle<Wry>) -> Result<String, Strin
     state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())
         .map(|settings| settings.input_method.clone())
 }
 
@@ -327,7 +333,7 @@ pub(crate) fn current_input_device(app: &AppHandle<Wry>) -> Result<Option<String
     state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())
         .map(|settings| settings.selected_input_device.clone())
 }
 
@@ -337,7 +343,7 @@ pub(crate) fn current_auth_path(app: &AppHandle<Wry>) -> Result<PathBuf, String>
     state
         .auth_path
         .lock()
-        .map_err(|_| "desktop auth path state poisoned".to_string())
+        .map_err(|_| "Internal auth path state is corrupted (mutex poisoned)".to_string())
         .map(|path| path.clone())
 }
 
@@ -347,7 +353,7 @@ pub(crate) fn sound_enabled(app: &AppHandle<Wry>) -> Result<bool, String> {
     state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())
         .map(|settings| settings.sound_enabled)
 }
 
@@ -357,7 +363,7 @@ pub(crate) fn overlay_enabled(app: &AppHandle<Wry>) -> Result<bool, String> {
     state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())
         .map(|settings| settings.overlay_enabled)
 }
 
@@ -367,8 +373,23 @@ pub(crate) fn microphone_always_on(app: &AppHandle<Wry>) -> Result<bool, String>
     state
         .settings
         .lock()
-        .map_err(|_| "settings state poisoned".to_string())
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())
         .map(|settings| settings.microphone_always_on)
+}
+
+/// 读取当前系统输出音量 duck 开关。
+///
+/// 平台不支持时恒为 false。
+pub(crate) fn volume_duck_enabled(app: &AppHandle<Wry>) -> Result<bool, String> {
+    if !dou_voice_platform::volume::is_supported() {
+        return Ok(false);
+    }
+    let state = app.state::<DesktopState>();
+    state
+        .settings
+        .lock()
+        .map_err(|_| "Internal settings state is corrupted (mutex poisoned)".to_string())
+        .map(|settings| settings.duck_output_volume)
 }
 
 fn voice_input_is_busy(app: &AppHandle<Wry>) -> Result<bool, String> {
@@ -376,6 +397,6 @@ fn voice_input_is_busy(app: &AppHandle<Wry>) -> Result<bool, String> {
     state
         .voice_busy
         .lock()
-        .map_err(|_| "voice busy state poisoned".to_string())
+        .map_err(|_| "Internal voice busy state is corrupted (mutex poisoned)".to_string())
         .map(|busy| *busy)
 }

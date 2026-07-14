@@ -77,7 +77,7 @@ fn run_event_tap(
             let _ = Arc::from_raw(state_ptr as *const Mutex<MacHotkeyState>);
         }
         let _ = init_tx.send(Err(
-            "failed to create macOS event tap for hotkey listener".to_string()
+            "Could not create macOS event tap for hotkey listener (Accessibility permission may be missing)".to_string()
         ));
         return;
     };
@@ -90,7 +90,7 @@ fn run_event_tap(
             let _ = Arc::from_raw(state_ptr as *const Mutex<MacHotkeyState>);
         }
         let _ = init_tx.send(Err(
-            "failed to create macOS hotkey run loop source".to_string()
+            "Could not create macOS hotkey run loop source".to_string()
         ));
         return;
     };
@@ -100,7 +100,7 @@ fn run_event_tap(
             CFMachPort::invalidate(&tap);
             let _ = Arc::from_raw(state_ptr as *const Mutex<MacHotkeyState>);
         }
-        let _ = init_tx.send(Err("failed to get macOS hotkey run loop".to_string()));
+        let _ = init_tx.send(Err("Could not get the current macOS hotkey run loop".to_string()));
         return;
     };
 

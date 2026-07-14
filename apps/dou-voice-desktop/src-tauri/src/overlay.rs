@@ -12,7 +12,8 @@ use crate::app_state::{
 };
 use crate::settings::overlay_enabled;
 
-const OVERLAY_HIDE_ANIMATION_DELAY: std::time::Duration = std::time::Duration::from_millis(720);
+// 需略长于前端 leave 动画（约 360ms），避免窗口提前 hide 截断 fade-out。
+const OVERLAY_HIDE_ANIMATION_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
 #[cfg(target_os = "macos")]
 tauri_panel! {
@@ -74,11 +75,9 @@ fn overlay_should_auto_hide(phase: &str) -> bool {
 }
 
 fn position_overlay_window(window: &WebviewWindow<Wry>) {
-    let monitor = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .or_else(|| window.primary_monitor().ok().flatten());
+    // 优先跟用户正在操作的屏幕：前台窗口 > 光标 > overlay 当前屏 > 主屏。
+    // 仅用 current_monitor() 会一直钉在主屏（overlay 初始创建位置）。
+    let monitor = target_overlay_monitor(window);
     let Some(monitor) = monitor else {
         return;
     };
@@ -95,6 +94,27 @@ fn position_overlay_window(window: &WebviewWindow<Wry>) {
     let bottom_y =
         work_area.position.y + (work_height - window_height - OVERLAY_BOTTOM_MARGIN_PX).max(0);
     let _ = window.set_position(PhysicalPosition::new(centered_x, bottom_y));
+}
+
+/// 选择 overlay 应附着的显示器。
+fn target_overlay_monitor(window: &WebviewWindow<Wry>) -> Option<tauri::Monitor> {
+    if let Some((x, y)) = dou_voice_platform::focus::foreground_window_center() {
+        if let Ok(Some(monitor)) = window.monitor_from_point(f64::from(x), f64::from(y)) {
+            return Some(monitor);
+        }
+    }
+
+    if let Ok(cursor) = window.cursor_position() {
+        if let Ok(Some(monitor)) = window.monitor_from_point(cursor.x, cursor.y) {
+            return Some(monitor);
+        }
+    }
+
+    window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
 }
 
 fn schedule_overlay_hide(app: AppHandle<Wry>, phase: String) {

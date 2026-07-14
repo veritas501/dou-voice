@@ -70,7 +70,7 @@ Tauri v2 shell。前端 + 后端 + build 脚本。
 - `app_state.rs`：共享状态。
   - `DesktopState`：`auth_path` / `voice_busy` / `active_recording` / `voice_status` / `diagnostic_events` / `settings` / `user_settings_exists` / `hotkey` / `prewarmed_microphone`。CPAL stream 不放这里（Windows 上不是 `Send`），由 worker 线程持有。
   - `HotkeyRuntimeState`：`capture_active` / `pressed` / `suppressed_until_release` / `press_generation` / `last_press_at`，放在同一把锁下避免跨线程状态撕裂。
-  - 常量：标签、文件名、默认值、超时（`HOTKEY_PRESS_DEBOUNCE=30ms`、`HOTKEY_RELEASE_FALLBACK_TIMEOUT=30s`、`OVERLAY_HIDE_DELAY=1.6s`、`MAX_DIAGNOSTIC_EVENTS=2000` 等）。
+  - 常量：标签、文件名、默认值、超时（`HOTKEY_PRESS_DEBOUNCE=30ms`、`HOTKEY_RELEASE_FALLBACK_TIMEOUT=30s`、`OVERLAY_HIDE_DELAY=450ms`、`MAX_DIAGNOSTIC_EVENTS=2000` 等）。
   - `LoginCaptureState`：登录窗口 localStorage 捕获态，用 `request_id` 避免读到上一轮残留。
 - `voice.rs`：语音输入主链路。`begin_voice_input` / `finish_voice_input` / `record_once_and_type`（5 秒测试录音）/ `start_hotkey_recording_body` / `finish_hotkey_recording_body`。负责状态切换、提示音、文本输入、诊断事件。
 - `voice_worker.rs`：`spawn_streaming_recognition_worker` / `spawn_streaming_recording_worker`。识别会话和音频来源分离：前者负责 ASR，后者仅在按需模式下在独立线程持有 CPAL stream。
@@ -82,7 +82,7 @@ Tauri v2 shell。前端 + 后端 + build 脚本。
   - `export_auth`：清空旧捕获 → 注入 JS 读取 `samantha_web_web_id` 和 `__tea_cache_tokens_497858` → 等待回传 → 从 WebView cookie store 读取 domain 含 `doubao.com` 的 Cookie（fallback 按域名查 `www.doubao.com`、`frontier-audio-web-ws.doubao.com`、`ws-samantha.doubao.com`）→ 校验后写入 `auth.json`。
 - `settings.rs`：`get_settings` / `save_settings` / `get_available_input_devices` / `get_default_auth_path` / `initialize_settings` / `initialize_default_auth_path`。持久化 `AppSettings`（hotkey、inputMethod、selectedInputDevice、soundEnabled、overlayEnabled）。`settings.json` 不存在或损坏时回退默认值并显示 setup wizard。
 - `diagnostics.rs`：`check_auth_status` / `export_diagnostics`。`DiagnosticsSnapshot` 包含 app 版本、平台、auth 摘要、ASR 摘要、当前 voice status、最近 2000 条事件。事件文本用预览，不写 Cookie / device_id / web_id 原文。
-- `overlay.rs`：`setup_overlay` 创建 overlay 窗口，`update_overlay_status` 控制显隐和内容。Windows/Linux 用 Tauri 透明置顶 `WebviewWindowBuilder`；macOS 用 `tauri-nspanel` 创建 non-activating NSPanel（`can_become_key_window: false`、`is_floating_panel: true`）。默认 416×112，位于当前显示器工作区底部居中，底边距 56px。
+- `overlay.rs`：`setup_overlay` 创建 overlay 窗口，`update_overlay_status` 控制显隐和内容。Windows/Linux 用 Tauri 透明置顶 `WebviewWindowBuilder`；macOS 用 `tauri-nspanel` 创建 non-activating NSPanel（`can_become_key_window: false`、`is_floating_panel: true`）。默认 416×112，位于目标显示器工作区底部居中，底边距 56px；目标屏优先取前台窗口所在屏，其次光标所在屏，最后回退 current/primary。
 - `tray.rs`：系统托盘图标、tooltip、菜单（`Show Window` / `Quit`）。双击托盘显示主窗口。图标随 voice status 变化。
 - `window.rs`：`should_hide_on_close` / `show_main_window`。关闭主窗口和登录窗口转为隐藏，进程常驻托盘。
 - `asr_options.rs`：`streaming_transcribe_options` 构造 ASR 流式参数。

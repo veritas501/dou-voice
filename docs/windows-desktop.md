@@ -71,7 +71,7 @@ setup wizard 四步：
   - `Direct typing with fallback`：先 `enigo.text()`（等价 `SendInput(KEYEVENTF_UNICODE)`）；失败后备份剪贴板 → 写入文本 → 发送 Ctrl+V（扫描码 `Key::Other(0x56)` 绕过键盘布局）→ 还原剪贴板。
   - `Clipboard paste`：只写入剪贴板，不自动粘贴。
 - **Sound**：Windows 播放内嵌短 WAV，反馈 Start / Stop / Complete / Error。
-- **Overlay**：Tauri 透明置顶窗口，416×112，底部居中，底边距 56px，不应抢占焦点。
+- **Overlay**：Tauri 透明置顶窗口，416×112，附着到前台窗口/光标所在显示器底部居中，底边距 56px，不应抢占焦点。
 
 ## 诊断
 
@@ -135,7 +135,7 @@ apps\dou-voice-desktop\src-tauri\target\release\bundle\nsis\
 
 ### Overlay 不显示
 
-确认 `General` 页 `Overlay` 已开启。idle 状态且没有最新文本时 overlay 会隐藏；错误或 idle 状态会延迟隐藏（`OVERLAY_HIDE_DELAY = 1.6s`）。
+确认 `General` 页 `Overlay` 已开启。idle 状态且没有最新文本时 overlay 会隐藏；错误或 idle 状态会延迟隐藏（`OVERLAY_HIDE_DELAY = 450ms`）。
 
 ### 关闭主窗口后应用仍在运行
 

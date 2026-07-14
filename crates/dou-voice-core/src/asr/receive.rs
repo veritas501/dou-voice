@@ -5,6 +5,7 @@ use tokio::sync::{mpsc::UnboundedSender, oneshot};
 use tokio::time::{sleep, sleep_until, timeout, Instant};
 use tokio_tungstenite::tungstenite::Message;
 
+use super::error_map::asr_ws_error;
 use super::event::AsrEvent;
 use super::options::PcmTranscribeOptions;
 use super::parser::{parse_binary_server_event, parse_server_event};
@@ -46,7 +47,7 @@ where
             break;
         };
 
-        let message = message.map_err(|error| CoreError::AsrConnection(error.to_string()))?;
+        let message = message.map_err(|error| asr_ws_error("Receive ASR WebSocket message", &error))?;
         match message {
             Message::Text(text) => {
                 if let Some(event) = parse_server_event(&text)? {
@@ -177,9 +178,14 @@ fn handle_receive_timeout(
     }
 
     Err(if events.is_empty() {
-        CoreError::AsrConnection("timed out waiting for ASR result".to_string())
+        CoreError::AsrConnection(format!(
+            "Timed out after {timeout_ms}ms waiting for the first ASR result. Check network or auth."
+        ))
     } else {
-        CoreError::AsrConnection("timed out waiting for ASR finish event".to_string())
+        CoreError::AsrConnection(format!(
+            "Timed out after {timeout_ms}ms waiting for ASR finish event ({} events received)",
+            events.len()
+        ))
     })
 }
 

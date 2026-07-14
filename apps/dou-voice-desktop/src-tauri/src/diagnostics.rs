@@ -26,14 +26,14 @@ pub(crate) fn export_diagnostics(app: AppHandle<Wry>) -> Result<ExportDiagnostic
     let output_path = diagnostics_output_path(&app)?;
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)
-            .map_err(|error| format!("failed to create diagnostics directory: {error}"))?;
+            .map_err(|error| format!("Could not create diagnostics directory: {error}"))?;
     }
 
     let event_count = snapshot.events.len();
     let data = serde_json::to_vec_pretty(&snapshot)
-        .map_err(|error| format!("failed to serialize diagnostics: {error}"))?;
+        .map_err(|error| format!("Could not serialize diagnostics JSON: {error}"))?;
     fs::write(&output_path, data)
-        .map_err(|error| format!("failed to write diagnostics: {error}"))?;
+        .map_err(|error| format!("Could not write diagnostics file: {error}"))?;
 
     Ok(ExportDiagnosticsResult {
         output_path: output_path.display().to_string(),
@@ -87,12 +87,12 @@ fn build_diagnostics_snapshot(app: &AppHandle<Wry>) -> Result<DiagnosticsSnapsho
     let voice_status = state
         .voice_status
         .lock()
-        .map_err(|_| "voice status state poisoned".to_string())?
+        .map_err(|_| "Internal voice status state is corrupted (mutex poisoned)".to_string())?
         .clone();
     let events = state
         .diagnostic_events
         .lock()
-        .map_err(|_| "diagnostic event state poisoned".to_string())?
+        .map_err(|_| "Internal diagnostics event state is corrupted (mutex poisoned)".to_string())?
         .iter()
         .cloned()
         .collect::<Vec<_>>();

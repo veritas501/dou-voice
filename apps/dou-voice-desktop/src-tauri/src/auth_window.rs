@@ -17,8 +17,12 @@ use crate::util::{unix_time_ms, uuid_like_request_id};
 #[tauri::command]
 pub(crate) async fn open_login_window(app: AppHandle<Wry>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(LOGIN_LABEL) {
-        window.show().map_err(|error| error.to_string())?;
-        window.set_focus().map_err(|error| error.to_string())?;
+        window
+            .show()
+            .map_err(|error| format!("Could not show the Doubao login window: {error}"))?;
+        window
+            .set_focus()
+            .map_err(|error| format!("Could not focus the Doubao login window: {error}"))?;
         return Ok(());
     }
 
@@ -43,7 +47,7 @@ pub(crate) async fn open_login_window(app: AppHandle<Wry>) -> Result<(), String>
             }
         })
         .build()
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("Could not open the Doubao login window: {error}"))?;
 
     Ok(())
 }
@@ -67,12 +71,14 @@ pub(crate) async fn export_auth(
         let mut latest = state
             .latest
             .lock()
-            .map_err(|_| "localStorage capture state poisoned".to_string())?;
+            .map_err(|_| "Internal auth capture state is corrupted (mutex poisoned)".to_string())?;
         *latest = None;
     }
     login
         .eval(local_storage_capture_script(&request_id))
-        .map_err(|error| format!("failed to read localStorage: {error}"))?;
+        .map_err(|error| {
+            format!("Could not read Doubao localStorage from the login window: {error}")
+        })?;
 
     let storage = wait_for_storage_capture(&state, &request_id)?;
     let cookies = read_doubao_cookies(&login)?;
@@ -82,17 +88,21 @@ pub(crate) async fn export_auth(
         web_id: storage.web_id,
         captured_at_unix_ms: unix_time_ms(),
     };
-    params.validate().map_err(|error| error.to_string())?;
+    params
+        .validate()
+        .map_err(|error| format!("Exported auth is incomplete: {error}"))?;
 
     let output_path = PathBuf::from(output_path);
     let store = AuthParamsStore::new(&output_path);
-    store.save(&params).map_err(|error| error.to_string())?;
+    store.save(&params).map_err(|error| {
+        format!("Could not write auth file {}: {error}", output_path.display())
+    })?;
     {
         let desktop_state = app.state::<DesktopState>();
         let mut auth_path = desktop_state
             .auth_path
             .lock()
-            .map_err(|_| "desktop auth path state poisoned".to_string())?;
+            .map_err(|_| "Internal auth path state is corrupted (mutex poisoned)".to_string())?;
         *auth_path = output_path;
     }
 
@@ -116,7 +126,7 @@ fn read_doubao_cookies(
 
     for cookie in window
         .cookies()
-        .map_err(|error| format!("failed to read cookies: {error}"))?
+        .map_err(|error| format!("Could not read cookies from the login window: {error}"))?
     {
         if cookie
             .domain()
@@ -135,10 +145,11 @@ fn read_doubao_cookies(
         "https://frontier-audio-web-ws.doubao.com",
         "https://ws-samantha.doubao.com",
     ] {
-        let url = tauri::Url::parse(url).map_err(|error| error.to_string())?;
+        let url = tauri::Url::parse(url)
+            .map_err(|error| format!("Invalid cookie domain URL `{url}`: {error}"))?;
         let cookies = window
             .cookies_for_url(url)
-            .map_err(|error| format!("failed to read cookies: {error}"))?;
+            .map_err(|error| format!("Could not read cookies for ASR/login domains: {error}"))?;
         for cookie in cookies {
             values.insert(cookie.name().to_string(), cookie.value().to_string());
         }
@@ -158,7 +169,7 @@ fn wait_for_storage_capture(
         if let Some(capture) = state
             .latest
             .lock()
-            .map_err(|_| "localStorage capture state poisoned".to_string())?
+            .map_err(|_| "Internal auth capture state is corrupted (mutex poisoned)".to_string())?
             .clone()
         {
             if capture.request_id == request_id {
@@ -167,7 +178,10 @@ fn wait_for_storage_capture(
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    Err("did not receive localStorage capture; confirm the login window is signed in and still open".to_string())
+    Err(
+        "Did not receive Doubao localStorage capture. Keep the login window open, finish sign-in, then click Export Auth again."
+            .to_string(),
+    )
 }
 
 /// 生成注入到豆包登录页的 localStorage 读取脚本。
@@ -197,7 +211,7 @@ fn local_storage_capture_script(request_id: &str) -> String {
   window.location.href = "https://{capture_host}{capture_path}?payload=" + encoded;
 }})();
 "#,
-        request_id_json = serde_json::to_string(request_id).expect("serialize request id"),
+        request_id_json = serde_json::to_string(request_id).unwrap_or_else(|_| format!("\"{}\"", request_id)),
         capture_host = CAPTURE_HOST,
         capture_path = CAPTURE_PATH
     )

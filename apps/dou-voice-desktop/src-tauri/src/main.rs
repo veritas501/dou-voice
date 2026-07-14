@@ -93,5 +93,5 @@ fn main() {
             normalize_hotkey_candidate
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("Dou Voice failed to start. Check WebView2 runtime, display, and app logs.");
 }

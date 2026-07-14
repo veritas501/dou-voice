@@ -15,7 +15,7 @@ use crate::diagnostics::emit_voice_debug;
 use crate::overlay::update_overlay_status;
 use crate::settings::{
     current_auth_path, current_input_device, current_input_method, microphone_always_on,
-    sound_enabled,
+    sound_enabled, volume_duck_enabled,
 };
 use crate::tray::update_tray_status;
 use crate::util::text_preview;
@@ -29,7 +29,7 @@ pub(crate) fn get_voice_status(
     state
         .voice_status
         .lock()
-        .map_err(|_| "voice status state poisoned".to_string())
+        .map_err(|_| "Internal voice status state is corrupted (mutex poisoned)".to_string())
         .map(|status| status.clone())
 }
 
@@ -52,7 +52,7 @@ pub(crate) async fn run_voice_input(
     seconds: u64,
 ) -> Result<VoiceInputResult, String> {
     if seconds == 0 {
-        return Err("record seconds must be greater than zero".to_string());
+        return Err("Record duration must be greater than zero seconds".to_string());
     }
     begin_voice_input(&app)?;
     let result = run_voice_input_body(&app, seconds).await;
@@ -70,8 +70,8 @@ async fn run_voice_input_body(
         record_input(Duration::from_secs(seconds), input_device.as_deref())
     })
     .await
-    .map_err(|error| format!("recording task failed: {error}"))?
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| format!("Recording task crashed: {error}"))?
+    .map_err(|error| format!("Could not record microphone audio: {error}"))?;
 
     recognize_and_type_pcm(app, pcm).await
 }
@@ -103,7 +103,7 @@ fn start_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<(), String> {
     );
     let auth = AuthParamsStore::new(&auth_path)
         .load()
-        .map_err(|error| format!("failed to load auth: {error}"))?;
+        .map_err(|error| format!("Could not load auth from {}: {error}", auth_path.display()))?;
     emit_voice_debug(
         app,
         "auth_loaded",
@@ -122,7 +122,7 @@ fn start_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<(), String> {
         let mut active = state
             .active_recording
             .lock()
-            .map_err(|_| "active recording state poisoned".to_string())?;
+            .map_err(|_| "Internal active-recording state is corrupted (mutex poisoned)".to_string())?;
         *active = Some(worker);
     }
     set_voice_status(
@@ -156,11 +156,11 @@ async fn finish_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<VoiceInput
         let mut active = state
             .active_recording
             .lock()
-            .map_err(|_| "active recording state poisoned".to_string())?;
+            .map_err(|_| "Internal active-recording state is corrupted (mutex poisoned)".to_string())?;
         active.take()
     };
     let Some(recording) = recording else {
-        return Err("no active recording".to_string());
+        return Err("No active recording to finish (hotkey release without a started session)".to_string());
     };
 
     let live_text = current_voice_text(app);
@@ -181,11 +181,11 @@ async fn finish_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<VoiceInput
         recording
             .result_rx
             .recv()
-            .map_err(|_| "recording worker returned no result".to_string())?
+            .map_err(|_| "Recording worker exited without returning a result".to_string())?
     })
     .await
-    .map_err(|error| format!("stop recording task failed: {error}"))?
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| format!("Stop-recording task crashed: {error}"))?
+    .map_err(|error| format!("Could not finish streaming recognition: {error}"))?;
 
     type_recognition_result(app, result).await
 }
@@ -241,7 +241,7 @@ async fn recognize_and_type_pcm(
     );
     let auth = AuthParamsStore::new(&auth_path)
         .load()
-        .map_err(|error| format!("failed to load auth: {error}"))?;
+        .map_err(|error| format!("Could not load auth from {}: {error}", auth_path.display()))?;
 
     set_voice_status(app, "recognizing", "Recognizing.".to_string(), None);
     let events = transcribe_pcm_bytes(
@@ -251,7 +251,7 @@ async fn recognize_and_type_pcm(
         &PcmTranscribeOptions::default(),
     )
     .await
-    .map_err(|error| format!("recognition failed: {error}"))?;
+    .map_err(|error| format!("Speech recognition failed: {error}"))?;
     let Some(final_text) = transcript_text_from_events(&events) else {
         emit_empty_text_debug(app, events.len(), pcm.len());
         return Ok(VoiceInputResult {
@@ -279,11 +279,11 @@ fn type_text_to_focused_window(app: &AppHandle<Wry>, text: &str) -> Result<(), S
     let outcome = if input_method == INPUT_METHOD_CLIPBOARD {
         // 用户显式选择"剪贴板"模式：只写剪贴板，提示手动粘贴。
         dou_voice_platform::input::copy_text_to_clipboard(text)
-            .map_err(|error| format!("failed to copy text to clipboard: {error}"))?
+            .map_err(|error| format!("Could not copy recognized text to the clipboard: {error}"))?
     } else {
         // 默认"直接"模式：分层 fallback，最后一层是剪贴板。
         dou_voice_platform::input::type_text(text)
-            .map_err(|error| format!("failed to type text: {error}"))?
+            .map_err(|error| format!("Could not type recognized text into the focused window: {error}"))?
     };
 
     match outcome.method {
@@ -356,17 +356,20 @@ fn begin_voice_input(app: &AppHandle<Wry>) -> Result<(), String> {
         let mut busy = state
             .voice_busy
             .lock()
-            .map_err(|_| "voice busy state poisoned".to_string())?;
+            .map_err(|_| "Internal voice busy state is corrupted (mutex poisoned)".to_string())?;
         if *busy {
-            return Err("voice input is already running".to_string());
+            return Err("Voice input is already running; wait for the current session to finish".to_string());
         }
         *busy = true;
     }
+    duck_system_volume_if_enabled(app);
     set_voice_status(app, "starting", "Preparing voice input.".to_string(), None);
     Ok(())
 }
 
 fn finish_voice_input(app: &AppHandle<Wry>, result: &Result<VoiceInputResult, String>) {
+    // 先恢复音量，再清理 busy / 状态，避免异常路径留下低音量。
+    restore_system_volume_if_needed(app);
     {
         let state = app.state::<DesktopState>();
         if let Ok(mut busy) = state.voice_busy.lock() {
@@ -384,6 +387,81 @@ fn finish_voice_input(app: &AppHandle<Wry>, result: &Result<VoiceInputResult, St
             Some(result.final_text.clone()),
         ),
         Err(error) => set_voice_status(app, "error", error.clone(), None),
+    }
+}
+
+/// 语音输入开始时压低系统输出音量；失败只记诊断，不阻断录音。
+fn duck_system_volume_if_enabled(app: &AppHandle<Wry>) {
+    // 设置读取失败时保守跳过，避免误降音量。
+    match volume_duck_enabled(app) {
+        Ok(true) => {}
+        Ok(false) => return,
+        Err(error) => {
+            emit_voice_debug(
+                app,
+                "volume_duck_skipped",
+                format!("Skipped system volume duck because settings could not be read: {error}"),
+                None,
+                None,
+                None,
+            );
+            return;
+        }
+    }
+
+    let factor = dou_voice_platform::volume::DEFAULT_DUCK_FACTOR;
+    match dou_voice_platform::volume::duck_output_volume(factor) {
+        Ok(true) => emit_voice_debug(
+            app,
+            "volume_ducked",
+            format!(
+                "Lowered system output volume to {:.0}% of the previous level.",
+                factor * 100.0
+            ),
+            None,
+            None,
+            None,
+        ),
+        Ok(false) => emit_voice_debug(
+            app,
+            "volume_duck_skipped",
+            "Skipped system volume duck (already ducked in this session).".to_string(),
+            None,
+            None,
+            None,
+        ),
+        Err(error) => emit_voice_debug(
+            app,
+            "volume_duck_failed",
+            // 平台层已带具体原因（缺工具 / 无设备 / 解析失败等）。
+            format!("Could not lower system output volume: {error}"),
+            None,
+            None,
+            None,
+        ),
+    }
+}
+
+/// 语音输入结束时恢复进入前的系统输出音量。
+fn restore_system_volume_if_needed(app: &AppHandle<Wry>) {
+    match dou_voice_platform::volume::restore_output_volume() {
+        Ok(true) => emit_voice_debug(
+            app,
+            "volume_restored",
+            "Restored system output volume to the pre-recording level.".to_string(),
+            None,
+            None,
+            None,
+        ),
+        Ok(false) => {}
+        Err(error) => emit_voice_debug(
+            app,
+            "volume_restore_failed",
+            format!("Could not restore system output volume: {error}"),
+            None,
+            None,
+            None,
+        ),
     }
 }
 

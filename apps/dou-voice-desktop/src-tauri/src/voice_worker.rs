@@ -131,12 +131,12 @@ pub(crate) fn spawn_streaming_recognition_worker(
                 emit_voice_debug(
                     &asr_app,
                     "asr_error",
-                    format!("ASR failed: {error}"),
+                    format!("ASR stream failed: {error}"),
                     None,
                     Some(result_pcm_bytes.load(Ordering::Relaxed)),
                     None,
                 );
-                Err(format!("recognition failed: {error}"))
+                Err(format!("Speech recognition failed: {error}"))
             }
         };
         let _ = result_tx.send(result);
@@ -214,7 +214,7 @@ pub(crate) fn spawn_streaming_recording_worker(
                 emit_voice_debug(
                     &audio_app,
                     "audio_stream_error",
-                    format!("Input audio stream failed: {message}"),
+                    format!("Microphone input stream failed: {message}"),
                     None,
                     None,
                     None,
@@ -226,7 +226,7 @@ pub(crate) fn spawn_streaming_recording_worker(
 
     ready_rx
         .recv()
-        .map_err(|_| "recording worker failed to start".to_string())??;
+        .map_err(|_| "Recording worker failed to start (no ready signal from the audio thread)".to_string())??;
     Ok(RecordingWorker {
         input_stop: RecordingInputStop::OnDemand { stop_tx },
         result_rx,

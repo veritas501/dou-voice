@@ -4,5 +4,7 @@
 //! Windows 直接输入；macOS/Linux 后续应在这里增加各自模块，并保持对上层的接口稳定。
 
 pub mod feedback;
+pub mod focus;
 pub mod hotkey;
 pub mod input;
+pub mod volume;

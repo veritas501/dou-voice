@@ -139,7 +139,7 @@ function RecordingOverlay() {
         animate={leaving ? leavingMotion : { opacity: 1, scale: 1, y: 0, ...cardMotion }}
         transition={
           leaving
-            ? { duration: 0.68, times: [0, 0.62, 1], ease: [0.22, 1, 0.36, 1] }
+            ? { duration: 0.36, times: [0, 0.48, 1], ease: [0.22, 1, 0.36, 1] }
             : { type: "spring", stiffness: 430, damping: 34, mass: 0.8 }
         }
       >
@@ -147,7 +147,7 @@ function RecordingOverlay() {
           className="stext"
           initial={false}
           animate={{ height: textOpen ? "auto" : 0, opacity: textOpen ? 1 : 0 }}
-          transition={{ duration: leaving ? 0.26 : 0.34, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: leaving ? 0.16 : 0.34, ease: [0.22, 1, 0.36, 1] }}
         >
           <div className="stext-clip">
             <div

@@ -146,7 +146,13 @@ pub(crate) fn setup_tray(app: &mut App<Wry>) -> tauri::Result<()> {
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             TRAY_SHOW_ID => crate::window::show_main_window(app),
-            TRAY_QUIT_ID => app.exit(0),
+            TRAY_QUIT_ID => {
+                // 退出前尽量恢复系统音量，避免异常路径留下低音量。
+                if let Err(error) = dou_voice_platform::volume::restore_output_volume() {
+                    eprintln!("Could not restore system volume on quit: {error}");
+                }
+                app.exit(0);
+            }
             _ => {}
         });
 

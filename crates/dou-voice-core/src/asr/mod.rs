@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::{AuthParams, CoreError, CoreResult, PcmChunk};
 mod config;
+mod error_map;
 mod event;
 mod options;
 mod parser;
@@ -28,6 +29,7 @@ pub use options::PcmTranscribeOptions;
 use parser::{parse_binary_server_event, parse_server_event, parse_voicegenie_envelope};
 #[cfg(test)]
 use protocol::{encode_voicegenie_client_event, encode_voicegenie_task_request};
+use error_map::{asr_connection_error, asr_ws_error};
 use receive::{emit_observer_event, receive_asr_events};
 use send::{send_legacy_pcm_once, send_pcm_chunks, send_pcm_stream};
 #[cfg(test)]
@@ -71,16 +73,16 @@ pub async fn transcribe_pcm_bytes(
     let wire_protocol = config.wire_protocol();
     let mut request = url
         .into_client_request()
-        .map_err(|error| CoreError::AsrConnection(error.to_string()))?;
+        .map_err(|error| asr_connection_error("Build ASR WebSocket request", error))?;
     request.headers_mut().insert(
         "Cookie",
         HeaderValue::from_str(&auth.cookie_header())
-            .map_err(|error| CoreError::AsrConnection(error.to_string()))?,
+            .map_err(|error| asr_connection_error("Invalid ASR Cookie header", error))?,
     );
     request.headers_mut().insert(
         "Origin",
         HeaderValue::from_str(&config.origin)
-            .map_err(|error| CoreError::AsrConnection(error.to_string()))?,
+            .map_err(|error| asr_connection_error("Invalid ASR Origin header", error))?,
     );
     request.headers_mut().insert(
         "User-Agent",
@@ -96,7 +98,7 @@ pub async fn transcribe_pcm_bytes(
 
     let (socket, _) = connect_async(request)
         .await
-        .map_err(|error| CoreError::AsrConnection(error.to_string()))?;
+        .map_err(|error| asr_ws_error("Connect ASR WebSocket", &error))?;
     let (mut writer, mut reader) = socket.split();
 
     let mut events = vec![AsrEvent::Opened];
@@ -190,21 +192,21 @@ async fn transcribe_pcm_stream_inner(
     let wire_protocol = config.wire_protocol();
     if wire_protocol == AsrWireProtocol::LegacyRawPcm {
         return Err(CoreError::AsrConnection(
-            "legacy raw PCM ASR does not support streaming input".to_string(),
+            "Legacy raw-PCM ASR endpoint does not support streaming input; use the VoiceGenie endpoint".to_string(),
         ));
     }
     let mut request = url
         .into_client_request()
-        .map_err(|error| CoreError::AsrConnection(error.to_string()))?;
+        .map_err(|error| asr_connection_error("Build ASR WebSocket request", error))?;
     request.headers_mut().insert(
         "Cookie",
         HeaderValue::from_str(&auth.cookie_header())
-            .map_err(|error| CoreError::AsrConnection(error.to_string()))?,
+            .map_err(|error| asr_connection_error("Invalid ASR Cookie header", error))?,
     );
     request.headers_mut().insert(
         "Origin",
         HeaderValue::from_str(&config.origin)
-            .map_err(|error| CoreError::AsrConnection(error.to_string()))?,
+            .map_err(|error| asr_connection_error("Invalid ASR Origin header", error))?,
     );
     request.headers_mut().insert(
         "User-Agent",
@@ -220,7 +222,7 @@ async fn transcribe_pcm_stream_inner(
 
     let (socket, _) = connect_async(request)
         .await
-        .map_err(|error| CoreError::AsrConnection(error.to_string()))?;
+        .map_err(|error| asr_ws_error("Connect ASR WebSocket", &error))?;
     let (mut writer, mut reader) = socket.split();
 
     let mut events = vec![AsrEvent::Opened];

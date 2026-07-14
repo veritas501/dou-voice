@@ -6,6 +6,7 @@ use tokio::time::sleep;
 use tokio_tungstenite::tungstenite::Message;
 
 use super::config::AsrWireProtocol;
+use super::error_map::asr_connection_error;
 use super::options::PcmTranscribeOptions;
 use super::protocol::encode_client_audio_frame;
 use crate::{CoreError, CoreResult};
@@ -70,7 +71,7 @@ where
     socket
         .send(Message::Binary(message.into()))
         .await
-        .map_err(|error| CoreError::AsrConnection(error.to_string()))
+        .map_err(|error| asr_connection_error("Send audio to ASR", error))
 }
 
 fn legacy_tail_silence_bytes(options: &PcmTranscribeOptions) -> usize {
@@ -163,6 +164,6 @@ where
     socket
         .send(Message::Binary(message.into()))
         .await
-        .map_err(|error| CoreError::AsrConnection(error.to_string()))?;
+        .map_err(|error| asr_connection_error("Send audio to ASR", error))?;
     Ok(())
 }

@@ -269,16 +269,16 @@ fn paste_via_clipboard(text: &str) -> Result<(), String> {
 fn send_ctrl_v(enigo: &mut Enigo) -> Result<(), String> {
     enigo
         .key(Key::Control, Direction::Press)
-        .map_err(|e| format!("failed to press Control: {e}"))?;
+        .map_err(|e| format!("Could not press Ctrl for paste fallback: {e}"))?;
     enigo
         .key(Key::Other(0x56), Direction::Click)
-        .map_err(|e| format!("failed to click V key: {e}"))?;
+        .map_err(|e| format!("Could not press V for paste fallback: {e}"))?;
 
     sleep(Duration::from_millis(100));
 
     enigo
         .key(Key::Control, Direction::Release)
-        .map_err(|e| format!("failed to release Control: {e}"))?;
+        .map_err(|e| format!("Could not release Ctrl after paste fallback: {e}"))?;
     Ok(())
 }
 
@@ -305,7 +305,7 @@ fn set_clipboard_text(text: &str) -> Result<(), String> {
     };
     if locked.is_null() {
         free_global(handle);
-        return Err("failed to lock clipboard memory".to_string());
+        return Err("Could not lock clipboard memory for writing text".to_string());
     }
 
     unsafe {
@@ -321,7 +321,7 @@ fn set_clipboard_text(text: &str) -> Result<(), String> {
     };
     if emptied.is_err() {
         free_global(handle);
-        return Err("failed to empty clipboard".to_string());
+        return Err("Could not empty the clipboard before writing text".to_string());
     }
 
     // SetClipboardData 成功后所有权转移给剪贴板，不再需要 free。
@@ -331,7 +331,7 @@ fn set_clipboard_text(text: &str) -> Result<(), String> {
     };
     if transferred.is_err() {
         free_global(handle);
-        return Err("failed to set clipboard text".to_string());
+        return Err("Could not set clipboard text (another app may own the clipboard)".to_string());
     }
 
     Ok(())
@@ -379,7 +379,7 @@ fn clear_clipboard() -> Result<(), String> {
         // SAFETY: Clipboard is open while `_clipboard` is alive.
         EmptyClipboard()
     }
-    .map_err(|e| format!("failed to empty clipboard: {e}"))?;
+    .map_err(|e| format!("Could not empty the clipboard: {e}"))?;
     Ok(())
 }
 
@@ -407,7 +407,7 @@ fn open_clipboard() -> Result<ClipboardGuard, String> {
         }
         sleep(CLIPBOARD_OPEN_RETRY_DELAY);
     }
-    Err("failed to open clipboard".to_string())
+    Err("Could not open the clipboard after retries (another app may be holding it)".to_string())
 }
 
 struct ClipboardGuard;

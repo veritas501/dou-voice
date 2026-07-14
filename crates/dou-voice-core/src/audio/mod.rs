@@ -95,7 +95,7 @@ impl ActiveRecording {
         let recorded = samples
             .lock()
             .map_err(|_| {
-                CoreError::AudioUnavailable("recorded sample buffer lock poisoned".to_string())
+                CoreError::AudioUnavailable("Internal microphone buffer state is corrupted (mutex poisoned)".to_string())
             })?
             .clone();
         if recorded.is_empty() {
@@ -177,7 +177,7 @@ pub fn start_input_recording(device_name: Option<&str>) -> CoreResult<ActiveReco
 
     let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
     let stream_samples = Arc::clone(&samples);
-    let err_fn = |error| eprintln!("input stream error: {error}");
+    let err_fn = |error| eprintln!("Microphone input stream error: {error}");
 
     let stream = match sample_format {
         cpal::SampleFormat::F32 => device.build_input_stream(
@@ -248,7 +248,7 @@ pub fn start_input_streaming(
     }
 
     let on_pcm = Arc::new(Mutex::new(on_pcm));
-    let err_fn = |error| eprintln!("input stream error: {error}");
+    let err_fn = |error| eprintln!("Microphone input stream error: {error}");
 
     let stream = match sample_format {
         cpal::SampleFormat::F32 => {

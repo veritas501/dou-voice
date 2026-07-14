@@ -39,10 +39,10 @@ pub fn type_text(text: &str) -> Result<TextInputOutcome, String> {
 
 pub fn copy_text_to_clipboard(text: &str) -> Result<TextInputOutcome, String> {
     let mut clipboard =
-        Clipboard::new().map_err(|error| format!("failed to open clipboard: {error}"))?;
+        Clipboard::new().map_err(|error| format!("Could not open the clipboard: {error}"))?;
     clipboard
         .set_text(text.to_string())
-        .map_err(|error| format!("failed to set clipboard text: {error}"))?;
+        .map_err(|error| format!("Could not set clipboard text: {error}"))?;
     Ok(TextInputOutcome {
         method: TextInputMethod::Clipboard,
         prior_error: None,
@@ -59,11 +59,11 @@ fn enigo_type_text(text: &str) -> Result<(), String> {
 
 fn paste_via_clipboard(text: &str) -> Result<(), String> {
     let mut clipboard =
-        Clipboard::new().map_err(|error| format!("failed to open clipboard: {error}"))?;
+        Clipboard::new().map_err(|error| format!("Could not open the clipboard: {error}"))?;
     let original = clipboard.get_text().ok();
     clipboard
         .set_text(text.to_string())
-        .map_err(|error| format!("failed to set clipboard text: {error}"))?;
+        .map_err(|error| format!("Could not set clipboard text: {error}"))?;
 
     sleep(POST_CLIPBOARD_WRITE_DELAY);
 
@@ -85,13 +85,13 @@ fn send_paste_shortcut(enigo: &mut Enigo) -> Result<(), String> {
     let paste_key = paste_key();
     enigo
         .key(modifier, Direction::Press)
-        .map_err(|error| format!("failed to press paste modifier: {error}"))?;
+        .map_err(|error| format!("Could not press paste modifier key: {error}"))?;
     enigo
         .key(paste_key, Direction::Click)
-        .map_err(|error| format!("failed to click paste key: {error}"))?;
+        .map_err(|error| format!("Could not press paste key: {error}"))?;
     enigo
         .key(modifier, Direction::Release)
-        .map_err(|error| format!("failed to release paste modifier: {error}"))?;
+        .map_err(|error| format!("Could not release paste modifier key: {error}"))?;
     Ok(())
 }
 

@@ -88,12 +88,12 @@ pub(crate) fn update_global_shortcut(
     if manager.is_registered(previous.as_str()) {
         manager
             .unregister(previous.as_str())
-            .map_err(|error| format!("failed to unregister hotkey {previous}: {error}"))?;
+            .map_err(|error| format!("Could not unregister hotkey `{previous}`: {error}"))?;
     }
 
     if let Err(error) = manager.register(next.as_str()) {
         let _ = manager.register(previous.as_str());
-        return Err(format!("failed to register hotkey {next}: {error}"));
+        return Err(format!("Could not register hotkey `{next}`: {error}"));
     }
     Ok(())
 }
@@ -133,7 +133,7 @@ fn register_global_shortcut(app: &AppHandle<Wry>, shortcut: &str) -> Result<(), 
     let shortcut = normalize_global_shortcut(shortcut)?;
     app.global_shortcut()
         .register(shortcut.as_str())
-        .map_err(|error| format!("failed to register hotkey {shortcut}: {error}"))
+        .map_err(|error| format!("Could not register hotkey `{shortcut}`: {error}"))
 }
 
 #[cfg(all(not(windows), not(target_os = "macos")))]
@@ -192,7 +192,7 @@ fn set_hotkey_capture_active(app: &AppHandle<Wry>, active: bool) -> Result<(), S
     let mut hotkey = state
         .hotkey
         .lock()
-        .map_err(|_| "hotkey state poisoned".to_string())?;
+        .map_err(|_| "Internal hotkey state is corrupted (mutex poisoned)".to_string())?;
     hotkey.capture_active = active;
     Ok(())
 }
@@ -246,12 +246,20 @@ pub(crate) fn trigger_hotkey_pressed(app: &AppHandle<Wry>) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(error) = start_hotkey_recording(app.clone()).await {
-            if error == "voice input is already running" {
+            if error.starts_with("Voice input is already running") {
                 suppress_hotkey_until_release(&app, press_generation);
                 note_hotkey_ignored_while_busy(&app);
             } else {
                 let _ = mark_hotkey_released(&app);
-                eprintln!("voice recording failed: {error}");
+                emit_voice_debug(
+                    &app,
+                    "hotkey_start_failed",
+                    format!("Could not start hotkey recording: {error}"),
+                    None,
+                    None,
+                    None,
+                );
+                eprintln!("Could not start hotkey recording: {error}");
             }
         }
     });
@@ -266,8 +274,16 @@ pub(crate) fn trigger_hotkey_released(app: &AppHandle<Wry>) {
 
 fn spawn_hotkey_release(app: AppHandle<Wry>) {
     tauri::async_runtime::spawn(async move {
-        if let Err(error) = finish_hotkey_recording(app).await {
-            eprintln!("voice input failed: {error}");
+        if let Err(error) = finish_hotkey_recording(app.clone()).await {
+            emit_voice_debug(
+                &app,
+                "hotkey_finish_failed",
+                format!("Could not finish hotkey recording: {error}"),
+                None,
+                None,
+                None,
+            );
+            eprintln!("Could not finish hotkey recording: {error}");
         }
     });
 }

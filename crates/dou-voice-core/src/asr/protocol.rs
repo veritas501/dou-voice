@@ -53,8 +53,14 @@ pub(crate) fn encode_voicegenie_client_event(
         seq_id: sequence,
     };
     let mut output = Vec::with_capacity(request.encoded_len());
-    request
-        .encode(&mut output)
-        .expect("encoding VoiceGenie request to Vec cannot fail");
+    // Encoding into a growable Vec should not fail; avoid panicking in the ASR path.
+    if let Err(error) = request.encode(&mut output) {
+        // Soft fallback: retry once with a fresh buffer. Still never panic here.
+        output.clear();
+        if request.encode(&mut output).is_err() {
+            eprintln!("VoiceGenie protobuf encode failed: {error}");
+            return Vec::new();
+        }
+    }
     output
 }
