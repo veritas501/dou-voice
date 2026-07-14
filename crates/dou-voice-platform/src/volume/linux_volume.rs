@@ -206,10 +206,8 @@ mod tests {
 
     #[test]
     fn parses_wpctl_volume() {
-        assert!((parse_wpctl_volume("Volume: 0.80\n").unwrap() - 0.80).abs() < f32::EPSILON);
-        assert!(
-            (parse_wpctl_volume("Volume: 0.40 [MUTED]\n").unwrap() - 0.40).abs() < f32::EPSILON
-        );
+        assert_eq!(parse_wpctl_volume("Volume: 0.80\n"), Some(0.80));
+        assert_eq!(parse_wpctl_volume("Volume: 0.40 [MUTED]\n"), Some(0.40));
     }
 
     #[test]
