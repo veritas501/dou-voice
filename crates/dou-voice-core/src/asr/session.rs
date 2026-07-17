@@ -19,9 +19,10 @@ use crate::{AuthParams, CoreError, CoreResult};
 
 /// VoiceGenie 协议仍要求提交若干 voice_max_seconds 风格字段。
 ///
-/// 本地 press-to-talk 不再设置最大录音时长；这里把服务端提示值抬到一天，避免沿用
-/// Web 默认 20～25 秒导致长按被服务端提前切段或结束。
-const STREAMING_VOICE_MAX_SECONDS: u64 = 24 * 60 * 60;
+/// 本地 press-to-talk 不再设置 30 秒最大录音时长；这里把服务端提示值抬到
+/// 30 分钟，避免沿用 Web 默认 20～25 秒导致长按被服务端提前切段或结束，同时
+/// 避免提交 24 小时这类异常大的业务参数。
+const STREAMING_VOICE_MAX_SECONDS: u64 = 30 * 60;
 const STREAMING_VAD_ACCUMULATE_DURATION_MS: u64 = STREAMING_VOICE_MAX_SECONDS * 1_000;
 
 pub(crate) async fn start_asr_session_if_needed<S, R>(
