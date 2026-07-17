@@ -24,6 +24,7 @@ use build_info::get_app_build_info;
 use diagnostics::{check_auth_status, export_diagnostics};
 use hotkey::{
     begin_hotkey_capture, end_hotkey_capture, normalize_hotkey_candidate, setup_global_shortcut,
+    stop_hotkey_recording,
 };
 use overlay::setup_overlay;
 use settings::{
@@ -91,6 +92,7 @@ fn main() {
             begin_hotkey_capture,
             end_hotkey_capture,
             normalize_hotkey_candidate,
+            stop_hotkey_recording,
             fit_main_window
         ])
         .run(tauri::generate_context!())

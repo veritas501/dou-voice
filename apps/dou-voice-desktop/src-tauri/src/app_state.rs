@@ -23,11 +23,11 @@ pub(crate) const OVERLAY_HIDE_DELAY: Duration = Duration::from_millis(1_600);
 pub(crate) const OVERLAY_WIDTH: f64 = 416.0;
 pub(crate) const OVERLAY_HEIGHT: f64 = 112.0;
 pub(crate) const OVERLAY_BOTTOM_MARGIN_PX: i32 = 56;
-pub(crate) const HOTKEY_RELEASE_FALLBACK_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) const HOTKEY_PRESS_DEBOUNCE: Duration = Duration::from_millis(30);
 #[cfg(windows)]
 pub(crate) const WINDOWS_HOTKEY_POLL_INTERVAL: Duration = Duration::from_millis(30);
 pub(crate) const TRAY_SHOW_ID: &str = "show_window";
+pub(crate) const TRAY_STOP_RECORDING_ID: &str = "stop_recording";
 pub(crate) const TRAY_QUIT_ID: &str = "quit";
 pub(crate) const MAX_DIAGNOSTIC_EVENTS: usize = 2_000;
 
@@ -83,6 +83,7 @@ pub(crate) struct HotkeyRuntimeState {
     pub(crate) capture_active: bool,
     pub(crate) pressed: bool,
     pub(crate) suppressed_until_release: bool,
+    /// 当前按下周期编号，用于异步启动失败和快速按放的代际防护。
     pub(crate) press_generation: u64,
     pub(crate) last_press_at: Option<Instant>,
 }
@@ -304,6 +305,7 @@ pub(crate) struct VoiceStatus {
     pub(crate) phase: String,
     pub(crate) message: String,
     pub(crate) last_text: Option<String>,
+    pub(crate) can_stop_hotkey_recording: bool,
 }
 
 impl VoiceStatus {
@@ -313,6 +315,7 @@ impl VoiceStatus {
             phase: "idle".to_string(),
             message: "Ready.".to_string(),
             last_text: None,
+            can_stop_hotkey_recording: false,
         }
     }
 }

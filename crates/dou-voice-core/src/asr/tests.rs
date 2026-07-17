@@ -225,6 +225,9 @@ fn builds_voicegenie_asr_session_payload_with_web_asr_config() {
     assert!(payload.contains(r#""sample_rate":16000"#));
     assert!(payload.contains(r#""stream_model":"bigasr-acllm-release-streaming-grpc-4""#));
     assert!(payload.contains(r#""end_smooth_silence_proportion":0.9"#));
+    assert!(payload.contains(r#""max_vad_accumulate_duration_ms":86400000"#));
+    assert!(payload.contains(r#""reset_voice_max_seconds":86400"#));
+    assert!(payload.contains(r#""voice_max_seconds":86400"#));
     assert!(payload.contains(r#""did":"device-id""#));
 }
 

@@ -144,25 +144,21 @@ pub(crate) async fn finish_hotkey_recording(
         None,
         None,
     );
-    let result = finish_hotkey_recording_body(&app).await;
+    let Some(recording) = take_active_hotkey_recording(&app)? else {
+        return Err(
+            "No active recording to finish (hotkey release before session start)".to_string(),
+        );
+    };
+
+    let result = finish_hotkey_recording_body(&app, recording).await;
     finish_voice_input(&app, &result);
     result
 }
 
-async fn finish_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<VoiceInputResult, String> {
-    let recording = {
-        let state = app.state::<DesktopState>();
-        let mut active = state.active_recording.lock().map_err(|_| {
-            "Internal active-recording state is corrupted (mutex poisoned)".to_string()
-        })?;
-        active.take()
-    };
-    let Some(recording) = recording else {
-        return Err(
-            "No active recording to finish (hotkey release without a started session)".to_string(),
-        );
-    };
-
+async fn finish_hotkey_recording_body(
+    app: &AppHandle<Wry>,
+    recording: crate::app_state::RecordingWorker,
+) -> Result<VoiceInputResult, String> {
     let live_text = current_voice_text(app);
     set_voice_status(
         app,
@@ -188,6 +184,35 @@ async fn finish_hotkey_recording_body(app: &AppHandle<Wry>) -> Result<VoiceInput
     .map_err(|error| format!("Could not finish streaming recognition: {error}"))?;
 
     type_recognition_result(app, result).await
+}
+
+pub(crate) fn hotkey_recording_active(app: &AppHandle<Wry>) -> bool {
+    let state = app.state::<DesktopState>();
+    state
+        .active_recording
+        .lock()
+        .map(|active| active.is_some())
+        .unwrap_or(false)
+}
+
+pub(crate) fn abort_hotkey_recording(app: &AppHandle<Wry>, message: &str) -> Result<bool, String> {
+    let Some(recording) = take_active_hotkey_recording(app)? else {
+        return Ok(false);
+    };
+    recording.stop_input();
+    finish_voice_input(app, &Err(message.to_string()));
+    Ok(true)
+}
+
+fn take_active_hotkey_recording(
+    app: &AppHandle<Wry>,
+) -> Result<Option<crate::app_state::RecordingWorker>, String> {
+    let state = app.state::<DesktopState>();
+    let mut active = state
+        .active_recording
+        .lock()
+        .map_err(|_| "Internal active-recording state is corrupted (mutex poisoned)".to_string())?;
+    Ok(active.take())
 }
 
 async fn type_recognition_result(
@@ -491,6 +516,7 @@ fn set_voice_status(
         phase,
         message,
         last_text,
+        can_stop_hotkey_recording: hotkey_recording_active(app),
     };
 
     let previous_phase = {

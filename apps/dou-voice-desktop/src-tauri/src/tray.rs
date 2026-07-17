@@ -3,7 +3,7 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, AppHandle, Wry};
 
-use crate::app_state::{VoiceStatus, TRAY_ID, TRAY_QUIT_ID, TRAY_SHOW_ID};
+use crate::app_state::{VoiceStatus, TRAY_ID, TRAY_QUIT_ID, TRAY_SHOW_ID, TRAY_STOP_RECORDING_ID};
 
 /// 更新托盘 tooltip 和菜单项状态。
 pub(crate) fn update_tray_status(app: &AppHandle<Wry>, status: &VoiceStatus) {
@@ -127,9 +127,11 @@ fn tray_phase_color(phase: &str) -> [u8; 3] {
 /// 创建托盘菜单。
 pub(crate) fn setup_tray(app: &mut App<Wry>) -> tauri::Result<()> {
     let show_window = MenuItemBuilder::with_id(TRAY_SHOW_ID, "Show Window").build(app)?;
+    let stop_recording =
+        MenuItemBuilder::with_id(TRAY_STOP_RECORDING_ID, "Stop Recording").build(app)?;
     let quit = MenuItemBuilder::with_id(TRAY_QUIT_ID, "Quit").build(app)?;
     let menu = MenuBuilder::new(app)
-        .items(&[&show_window, &quit])
+        .items(&[&show_window, &stop_recording, &quit])
         .build()?;
 
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)
@@ -146,7 +148,12 @@ pub(crate) fn setup_tray(app: &mut App<Wry>) -> tauri::Result<()> {
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             TRAY_SHOW_ID => crate::window::show_main_window(app),
+            TRAY_STOP_RECORDING_ID => crate::hotkey::stop_hotkey_recording_if_active(app.clone()),
             TRAY_QUIT_ID => {
+                crate::hotkey::abort_hotkey_recording_if_active(
+                    app,
+                    "Voice input cancelled because the app is quitting.",
+                );
                 // 退出前尽量恢复系统音量，避免异常路径留下低音量。
                 if let Err(error) = dou_voice_platform::volume::restore_output_volume() {
                     eprintln!("Could not restore system volume on quit: {error}");

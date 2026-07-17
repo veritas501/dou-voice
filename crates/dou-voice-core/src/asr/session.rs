@@ -17,6 +17,13 @@ use super::parser::{parse_voicegenie_envelope, VoiceGenieEnvelope};
 use super::protocol::encode_voicegenie_client_event;
 use crate::{AuthParams, CoreError, CoreResult};
 
+/// VoiceGenie 协议仍要求提交若干 voice_max_seconds 风格字段。
+///
+/// 本地 press-to-talk 不再设置最大录音时长；这里把服务端提示值抬到一天，避免沿用
+/// Web 默认 20～25 秒导致长按被服务端提前切段或结束。
+const STREAMING_VOICE_MAX_SECONDS: u64 = 24 * 60 * 60;
+const STREAMING_VAD_ACCUMULATE_DURATION_MS: u64 = STREAMING_VOICE_MAX_SECONDS * 1_000;
+
 pub(crate) async fn start_asr_session_if_needed<S, R>(
     writer: &mut S,
     reader: &mut R,
@@ -157,15 +164,15 @@ pub(crate) fn voicegenie_asr_session_payload(auth: &AuthParams) -> String {
         "no_peak_skip_decoder": false,
         "nonstream_asr_timeout_ms": 8000,
         "bigasr_config": {
-            "max_vad_accumulate_duration_ms": 15000,
+            "max_vad_accumulate_duration_ms": STREAMING_VAD_ACCUMULATE_DURATION_MS,
             "regex_replace_key": "bigasr",
-            "vad_config": { "model": "v2", "voice_max_seconds": 5 },
+            "vad_config": { "model": "v2", "voice_max_seconds": STREAMING_VOICE_MAX_SECONDS },
             "enable_context_hotword": true
         },
         "force_to_speech_ms": 10000,
         "enable_regex_sdk": true,
         "ilme_weight": 0.1,
-        "reset_voice_max_seconds": 20,
+        "reset_voice_max_seconds": STREAMING_VOICE_MAX_SECONDS,
         "correction_map_key": "ocean",
         "enable_text_format": true,
         "enable_reset_params": true,
@@ -219,7 +226,7 @@ pub(crate) fn voicegenie_asr_session_payload(auth: &AuthParams) -> String {
         "enable_context_hotword": false,
         "enable_vad_timeout_break": false,
         "dumpRate": 0,
-        "voice_max_seconds": 25,
+        "voice_max_seconds": STREAMING_VOICE_MAX_SECONDS,
         "end_smooth_silence_proportion": 0.9,
         "check_audio_tag": 0,
         "end_smooth_window_ms": 800,

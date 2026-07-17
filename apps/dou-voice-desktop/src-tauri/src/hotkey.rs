@@ -2,14 +2,12 @@ use tauri::{App, AppHandle, Manager, Wry};
 
 #[cfg(windows)]
 use crate::app_state::WINDOWS_HOTKEY_POLL_INTERVAL;
-use crate::app_state::{
-    DesktopState, DEFAULT_HOTKEY_LABEL, HOTKEY_PRESS_DEBOUNCE, HOTKEY_RELEASE_FALLBACK_TIMEOUT,
-};
+use crate::app_state::{DesktopState, DEFAULT_HOTKEY_LABEL, HOTKEY_PRESS_DEBOUNCE};
 use crate::diagnostics::emit_voice_debug;
 use crate::settings::current_hotkey;
 use crate::voice::{
-    finish_hotkey_recording, note_hotkey_ignored_while_busy, start_hotkey_recording,
-    voice_input_busy,
+    abort_hotkey_recording, finish_hotkey_recording, hotkey_recording_active,
+    note_hotkey_ignored_while_busy, start_hotkey_recording, voice_input_busy,
 };
 
 /// 注册全局 press-to-talk 热键。
@@ -226,17 +224,6 @@ pub(crate) fn trigger_hotkey_pressed(app: &AppHandle<Wry>) {
         | HotkeyPressDecision::Capturing => return,
     };
 
-    let timeout_app = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(HOTKEY_RELEASE_FALLBACK_TIMEOUT);
-        if matches!(
-            mark_hotkey_released_for_generation(&timeout_app, press_generation),
-            HotkeyReleaseDecision::FinishRecording
-        ) {
-            spawn_hotkey_release(timeout_app);
-        }
-    });
-
     if voice_input_busy(app) {
         suppress_hotkey_until_release(app, press_generation);
         note_hotkey_ignored_while_busy(app);
@@ -245,21 +232,28 @@ pub(crate) fn trigger_hotkey_pressed(app: &AppHandle<Wry>) {
 
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(error) = start_hotkey_recording(app.clone()).await {
-            if error.starts_with("Voice input is already running") {
-                suppress_hotkey_until_release(&app, press_generation);
-                note_hotkey_ignored_while_busy(&app);
-            } else {
-                let _ = mark_hotkey_released(&app);
-                emit_voice_debug(
-                    &app,
-                    "hotkey_start_failed",
-                    format!("Could not start hotkey recording: {error}"),
-                    None,
-                    None,
-                    None,
-                );
-                eprintln!("Could not start hotkey recording: {error}");
+        match start_hotkey_recording(app.clone()).await {
+            Ok(()) => {
+                if hotkey_released_after_start(&app, press_generation) {
+                    spawn_hotkey_release(app);
+                }
+            }
+            Err(error) => {
+                if error.starts_with("Voice input is already running") {
+                    suppress_hotkey_until_release(&app, press_generation);
+                    note_hotkey_ignored_while_busy(&app);
+                } else {
+                    let _ = mark_hotkey_released(&app);
+                    emit_voice_debug(
+                        &app,
+                        "hotkey_start_failed",
+                        format!("Could not start hotkey recording: {error}"),
+                        None,
+                        None,
+                        None,
+                    );
+                    eprintln!("Could not start hotkey recording: {error}");
+                }
             }
         }
     });
@@ -272,9 +266,39 @@ pub(crate) fn trigger_hotkey_released(app: &AppHandle<Wry>) {
     }
 }
 
+/// 手动停止当前热键录音，用于托盘/主窗口逃生路径。
+///
+/// 这不是时长限制；它只在用户显式点击停止时触发，避免平台层丢失 release 事件后
+/// 录音状态无法恢复。
+#[tauri::command]
+pub(crate) fn stop_hotkey_recording(app: AppHandle<Wry>) -> Result<(), String> {
+    if hotkey_recording_active(&app) || hotkey_press_active(&app) {
+        force_mark_hotkey_released(&app);
+        spawn_hotkey_release(app);
+        return Ok(());
+    }
+
+    Err("No active hotkey recording to stop".to_string())
+}
+
+pub(crate) fn stop_hotkey_recording_if_active(app: AppHandle<Wry>) {
+    if hotkey_recording_active(&app) || hotkey_press_active(&app) {
+        force_mark_hotkey_released(&app);
+        spawn_hotkey_release(app);
+    }
+}
+
+pub(crate) fn abort_hotkey_recording_if_active(app: &AppHandle<Wry>, message: &str) {
+    force_mark_hotkey_released(app);
+    let _ = abort_hotkey_recording(app, message);
+}
+
 fn spawn_hotkey_release(app: AppHandle<Wry>) {
     tauri::async_runtime::spawn(async move {
         if let Err(error) = finish_hotkey_recording(app.clone()).await {
+            if error.starts_with("No active recording to finish") {
+                return;
+            }
             emit_voice_debug(
                 &app,
                 "hotkey_finish_failed",
@@ -347,26 +371,30 @@ fn mark_hotkey_released(app: &AppHandle<Wry>) -> HotkeyReleaseDecision {
     HotkeyReleaseDecision::FinishRecording
 }
 
-fn mark_hotkey_released_for_generation(
-    app: &AppHandle<Wry>,
-    generation: u64,
-) -> HotkeyReleaseDecision {
+fn force_mark_hotkey_released(app: &AppHandle<Wry>) {
     let state = app.state::<DesktopState>();
     let Ok(mut hotkey) = state.hotkey.lock() else {
-        return HotkeyReleaseDecision::Ignore;
+        return;
     };
-    if hotkey.press_generation != generation {
-        return HotkeyReleaseDecision::Ignore;
-    }
-    if hotkey.suppressed_until_release {
-        hotkey.suppressed_until_release = false;
-        return HotkeyReleaseDecision::Ignore;
-    }
-    if !hotkey.pressed {
-        return HotkeyReleaseDecision::Ignore;
-    }
     hotkey.pressed = false;
-    HotkeyReleaseDecision::FinishRecording
+    hotkey.suppressed_until_release = false;
+}
+
+fn hotkey_press_active(app: &AppHandle<Wry>) -> bool {
+    let state = app.state::<DesktopState>();
+    state
+        .hotkey
+        .lock()
+        .map(|hotkey| hotkey.pressed)
+        .unwrap_or(false)
+}
+
+fn hotkey_released_after_start(app: &AppHandle<Wry>, generation: u64) -> bool {
+    let state = app.state::<DesktopState>();
+    let Ok(hotkey) = state.hotkey.lock() else {
+        return false;
+    };
+    hotkey.press_generation == generation && !hotkey.pressed && !hotkey.suppressed_until_release
 }
 
 fn suppress_hotkey_until_release(app: &AppHandle<Wry>, generation: u64) {

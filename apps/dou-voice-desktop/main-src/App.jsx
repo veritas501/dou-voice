@@ -38,6 +38,7 @@ function App() {
     phase: "idle",
     message: "Ready.",
     lastText: "",
+    canStopHotkeyRecording: false,
   });
   const [settings, setSettings] = useState(defaultSettings());
   const [auth, setAuth] = useState(null);
@@ -270,6 +271,11 @@ function App() {
     );
   }
 
+  async function stopRecording() {
+    await command("stop_hotkey_recording");
+    writeLog("Stop recording requested.");
+  }
+
   async function exportDiagnostics() {
     const result = await command("export_diagnostics");
     writeLog(
@@ -457,13 +463,24 @@ function App() {
             <span className="eyebrow">{activeSection.hint}</span>
             <h1>{activeSection.label}</h1>
           </div>
-          <button
-            className="primary"
-            type="button"
-            onClick={() => runAction(recordOnce, writeLog)}
-          >
-            Test Recording
-          </button>
+          <div className="header-actions">
+            {voiceStatus.canStopHotkeyRecording && (
+              <button
+                className="danger"
+                type="button"
+                onClick={() => runAction(stopRecording, writeLog)}
+              >
+                Stop Recording
+              </button>
+            )}
+            <button
+              className="primary"
+              type="button"
+              onClick={() => runAction(recordOnce, writeLog)}
+            >
+              Test Recording
+            </button>
+          </div>
         </header>
 
         {currentSection === "general" && (
@@ -1182,6 +1199,7 @@ function normalizeVoiceStatus(status = {}) {
     phase: status.phase || "idle",
     message: status.message || "Ready.",
     lastText: status.lastText || "",
+    canStopHotkeyRecording: status.canStopHotkeyRecording === true,
   };
 }
 
