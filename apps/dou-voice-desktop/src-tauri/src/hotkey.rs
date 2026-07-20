@@ -16,6 +16,21 @@ use crate::voice::{
 /// 因此保存设置后下一轮轮询立即生效。
 #[cfg(windows)]
 pub(crate) fn setup_global_shortcut(app: &mut App<Wry>) -> tauri::Result<()> {
+    // 先装吞键钩子并同步当前热键；失败只记日志，轮询热键仍可用（fail-open）。
+    if let Err(error) = dou_voice_platform::hotkey::start_hotkey_key_swallow() {
+        eprintln!("Hotkey key swallow hook unavailable: {error}");
+        emit_voice_debug(
+            app.handle(),
+            "hotkey_swallow_hook_failed",
+            format!("Hotkey key swallow hook unavailable: {error}"),
+            None,
+            None,
+            None,
+        );
+    } else {
+        let hotkey = current_hotkey_or_default(app.handle());
+        dou_voice_platform::hotkey::set_swallowed_hotkey(Some(hotkey.as_str()));
+    }
     spawn_windows_modifier_hotkey_listener(app.handle().clone());
     Ok(())
 }
@@ -162,6 +177,8 @@ fn spawn_windows_modifier_hotkey_listener(app: AppHandle<Wry>) {
                     trigger_hotkey_released(&app);
                 }
                 hotkey = next_hotkey;
+                // 同步吞键目标，避免旧主键继续被吞或新主键漏吞。
+                dou_voice_platform::hotkey::set_swallowed_hotkey(Some(hotkey.as_str()));
             }
 
             let next_pressed = dou_voice_platform::hotkey::hotkey_pressed(&hotkey);
@@ -192,6 +209,11 @@ fn set_hotkey_capture_active(app: &AppHandle<Wry>, active: bool) -> Result<(), S
         .lock()
         .map_err(|_| "Internal hotkey state is corrupted (mutex poisoned)".to_string())?;
     hotkey.capture_active = active;
+    // 捕获新热键时必须放行真实按键，否则设置页收不到主键。
+    #[cfg(windows)]
+    {
+        dou_voice_platform::hotkey::set_hotkey_swallow_enabled(!active);
+    }
     Ok(())
 }
 

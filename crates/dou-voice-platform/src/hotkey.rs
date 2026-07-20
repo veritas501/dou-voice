@@ -1,5 +1,7 @@
 #[cfg(windows)]
 mod windows_hotkey;
+#[cfg(windows)]
+mod windows_hotkey_hook;
 
 #[cfg(not(windows))]
 mod unsupported_hotkey;
@@ -57,6 +59,53 @@ pub(crate) enum HotkeyKey {
 /// 提供安全封装给桌面端轮询使用。未知组合返回 false。
 pub fn hotkey_pressed(shortcut: &str) -> bool {
     platform::hotkey_pressed(shortcut)
+}
+
+/// 启动 Windows 低级键盘钩子，用于吞掉 press-to-talk 主键（防前台透传）。
+///
+/// 非 Windows 平台为 no-op。钩子安装失败时返回错误；调用方可选择仅记录日志并继续
+/// 使用轮询热键（fail-open）。
+pub fn start_hotkey_key_swallow() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        return windows_hotkey_hook::start_hotkey_key_swallow();
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(())
+    }
+}
+
+/// 停止 Windows 低级键盘钩子。非 Windows 为 no-op。
+pub fn stop_hotkey_key_swallow() {
+    #[cfg(windows)]
+    {
+        windows_hotkey_hook::stop_hotkey_key_swallow();
+    }
+}
+
+/// 更新需要吞主键的热键。modifier-only 或非法字符串会清空目标（不吞任何键）。
+pub fn set_swallowed_hotkey(shortcut: Option<&str>) {
+    #[cfg(windows)]
+    {
+        windows_hotkey_hook::set_swallowed_hotkey(shortcut);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = shortcut;
+    }
+}
+
+/// 临时开关吞键（设置页捕获热键时应关闭）。非 Windows 为 no-op。
+pub fn set_hotkey_swallow_enabled(enabled: bool) {
+    #[cfg(windows)]
+    {
+        windows_hotkey_hook::set_hotkey_swallow_enabled(enabled);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = enabled;
+    }
 }
 
 /// 判断热键字符串是否属于当前支持的格式。

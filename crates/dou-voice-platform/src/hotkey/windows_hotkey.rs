@@ -17,7 +17,7 @@ pub fn hotkey_pressed(shortcut: &str) -> bool {
     parse_hotkey(shortcut).is_some_and(spec_pressed)
 }
 
-fn spec_pressed(spec: HotkeySpec) -> bool {
+pub(super) fn spec_pressed(spec: HotkeySpec) -> bool {
     modifiers_match(spec)
         && match spec.key {
             Some(key) => key_pressed(vkey_for_key(key)),
@@ -25,7 +25,9 @@ fn spec_pressed(spec: HotkeySpec) -> bool {
         }
 }
 
-fn modifiers_match(spec: HotkeySpec) -> bool {
+/// 与 press-to-talk 轮询一致的修饰键精确匹配：配置里要求的修饰键必须按下，
+/// 未配置的修饰键必须未按下，避免误吞相近组合。
+pub(super) fn modifiers_match(spec: HotkeySpec) -> bool {
     spec.ctrl == ctrl_pressed()
         && spec.alt == alt_pressed()
         && spec.shift == shift_pressed()
@@ -48,7 +50,7 @@ fn shift_pressed() -> bool {
     key_pressed(VK_SHIFT) || key_pressed(VK_LSHIFT) || key_pressed(VK_RSHIFT)
 }
 
-fn vkey_for_key(key: HotkeyKey) -> VIRTUAL_KEY {
+pub(super) fn vkey_for_key(key: HotkeyKey) -> VIRTUAL_KEY {
     match key {
         HotkeyKey::Backquote => VK_OEM_3,
         HotkeyKey::Backslash => VK_OEM_5,
@@ -142,7 +144,33 @@ fn vkey_for_key(key: HotkeyKey) -> VIRTUAL_KEY {
     }
 }
 
-fn key_pressed(vkey: VIRTUAL_KEY) -> bool {
+/// 判断虚拟键是否属于修饰键（Ctrl/Alt/Shift/Win 及其左右变体）。
+pub(super) fn is_modifier_vkey(vk: u32) -> bool {
+    let modifiers = [
+        u32::from(VK_CONTROL.0),
+        u32::from(VK_LCONTROL.0),
+        u32::from(VK_RCONTROL.0),
+        u32::from(VK_MENU.0),
+        u32::from(VK_LMENU.0),
+        u32::from(VK_RMENU.0),
+        u32::from(VK_SHIFT.0),
+        u32::from(VK_LSHIFT.0),
+        u32::from(VK_RSHIFT.0),
+        u32::from(VK_LWIN.0),
+        u32::from(VK_RWIN.0),
+    ];
+    modifiers.contains(&vk)
+}
+
+pub(super) fn key_pressed(vkey: VIRTUAL_KEY) -> bool {
+    if async_key_pressed(vkey) {
+        return true;
+    }
+    // LL hook 吞主键后 GetAsyncKeyState 往往为 0；合并钩子记录的按住态。
+    super::windows_hotkey_hook::is_swallowed_main_key_held(vkey.0)
+}
+
+fn async_key_pressed(vkey: VIRTUAL_KEY) -> bool {
     unsafe {
         // SAFETY: GetAsyncKeyState accepts virtual-key codes. We only pass Win32 VK_* constants.
         GetAsyncKeyState(i32::from(vkey.0)) < 0
