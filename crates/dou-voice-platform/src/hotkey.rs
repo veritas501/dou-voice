@@ -68,7 +68,7 @@ pub fn hotkey_pressed(shortcut: &str) -> bool {
 pub fn start_hotkey_key_swallow() -> Result<(), String> {
     #[cfg(windows)]
     {
-        return windows_hotkey_hook::start_hotkey_key_swallow();
+        windows_hotkey_hook::start_hotkey_key_swallow()
     }
     #[cfg(not(windows))]
     {

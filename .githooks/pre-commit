@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# 提交前跑 format + clippy，与 CI 的 -D warnings 对齐。
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# 仅当本次提交包含 Rust 源码时才跑（文档-only 提交跳过）。
+if ! git diff --cached --name-only | grep -Eq '\.(rs|toml)$'; then
+  exit 0
+fi
+
+export DOU_VOICE_SKIP_FRONTEND_BUILD=1
+
+# 优先 Windows 原生 cargo.exe（WSL 下验证桌面路径时更贴近 CI Windows runner）。
+if command -v cargo.exe >/dev/null 2>&1; then
+  CARGO=(cargo.exe)
+elif command -v cargo >/dev/null 2>&1; then
+  CARGO=(cargo)
+else
+  echo "pre-commit: cargo not found" >&2
+  exit 1
+fi
+
+echo "==> pre-commit: cargo fmt --all"
+"${CARGO[@]}" fmt --all
+
+echo "==> pre-commit: cargo clippy --workspace --all-targets -- -D warnings"
+"${CARGO[@]}" clippy --workspace --all-targets -- -D warnings
+
+echo "==> pre-commit: ok"
